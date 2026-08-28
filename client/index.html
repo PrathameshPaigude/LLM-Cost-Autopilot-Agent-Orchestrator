@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Orchestrator & LLM Cost Autopilot</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="top-nav">
+            <div class="brand">
+                <div class="logo-icon">⚡</div>
+                <div>
+                    <h1>Agent Orchestration Platform</h1>
+                    <p class="subtitle">Multi-Agent Cost Autopilot & Dynamic Execution Matrix</p>
+                </div>
+            </div>
+
+            <!-- Provider Live Status Badges -->
+            <div class="provider-status-group" id="provider-badges">
+                <div class="prov-pill" id="pill-gemini"><span class="dot"></span> Gemini</div>
+                <div class="prov-pill" id="pill-groq"><span class="dot"></span> Groq</div>
+                <div class="prov-pill" id="pill-openrouter"><span class="dot"></span> OpenRouter</div>
+                <div class="prov-pill" id="pill-openai"><span class="dot"></span> OpenAI</div>
+                <div class="prov-pill" id="pill-ollama"><span class="dot"></span> Ollama</div>
+            </div>
+
+            <!-- Telemetry Badges -->
+            <div class="telemetry-bar">
+                <div class="telemetry-badge">
+                    <span class="badge-label">Cloud Money Saved</span>
+                    <span class="badge-value green" id="stat-saved">$0.0000</span>
+                </div>
+                <div class="telemetry-badge">
+                    <span class="badge-label">Tokens Processed</span>
+                    <span class="badge-value" id="stat-tokens">0</span>
+                </div>
+                <div class="telemetry-badge">
+                    <span class="badge-label">Energy Saved</span>
+                    <span class="badge-value blue" id="stat-energy">0.0 Wh</span>
+                </div>
+            </div>
+
+            <!-- Privacy Toggle -->
+            <div class="privacy-control">
+                <label class="switch">
+                    <input type="checkbox" id="privacy-toggle">
+                    <span class="slider round"></span>
+                </label>
+                <div class="privacy-label">
+                    <span id="privacy-status-text">🌐 Hybrid Cloud Free</span>
+                    <span class="privacy-sub" id="privacy-sub-text">Ollama + Gemini + Groq</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-layout">
+            <!-- Left Panel: Orchestration & Subtasks DAG -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Workflow Execution Graph</h2>
+                    <span class="badge-status" id="workflow-status">IDLE</span>
+                </div>
+                
+                <div class="subtasks-container" id="subtasks-list">
+                    <div class="empty-state">No active workflow. Enter a task below to decompose and execute.</div>
+                </div>
+
+                <!-- HITL Approval Box (Hidden by default) -->
+                <div class="hitl-box" id="hitl-panel" style="display: none;">
+                    <h3>⚠️ Human-in-the-Loop Review</h3>
+                    <p>Confidence score is below 0.80. Please inspect and approve or reject.</p>
+                    <div class="hitl-actions">
+                        <button class="btn btn-success" id="btn-approve">Approve</button>
+                        <button class="btn btn-danger" id="btn-reject">Reject</button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center Panel: Chat & Agent Output -->
+            <section class="workspace">
+                <div class="workspace-header">
+                    <div class="active-agent-banner" id="active-agent-banner">
+                        <span class="agent-tag" id="current-agent-tag">Supervisor</span>
+                        <span class="plan-text" id="plan-overview-text">Ready for instructions...</span>
+                    </div>
+
+                    <!-- Model Override Selector -->
+                    <div class="mode-selector-wrapper">
+                        <label for="mode-select">Execution Mode:</label>
+                        <select id="mode-select" class="mode-dropdown">
+                            <option value="auto">⚡ Auto Cost Autopilot (3-Tier Dynamic Matrix)</option>
+                            <optgroup label="Free Cloud Tiers">
+                                <option value="gemini:gemini-2.0-flash">Google Gemini 2.0 Flash (Free Tier)</option>
+                                <option value="gemini:gemini-2.0-flash-lite">Google Gemini 2.0 Flash Lite (Ultra Fast)</option>
+                                <option value="groq:llama-3.3-70b-versatile">Groq Llama 3.3 70B (Free Tier)</option>
+                                <option value="groq:llama-3.1-8b-instant">Groq Llama 3.1 8B (500+ tok/s)</option>
+                                <option value="groq:deepseek-r1-distill-llama-70b">Groq DeepSeek R1 Distill 70B</option>
+                                <option value="openrouter:deepseek/deepseek-r1:free">OpenRouter DeepSeek R1 (100% Free)</option>
+                                <option value="openrouter:qwen/qwen-2.5-coder-32b-instruct:free">OpenRouter Qwen 2.5 Coder 32B (Free)</option>
+                            </optgroup>
+                            <optgroup label="Commercial Frontier (OpenAI)">
+                                <option value="openai:gpt-4o-mini">OpenAI GPT-4o Mini</option>
+                                <option value="openai:gpt-4o">OpenAI GPT-4o</option>
+                                <option value="openai:o3-mini">OpenAI o3-mini (Reasoning)</option>
+                            </optgroup>
+                            <optgroup label="100% Offline Local (Ollama)">
+                                <option value="ollama:qwen2.5:1.5b">Local Ollama Qwen 2.5 1.5B (Fast)</option>
+                                <option value="ollama:llama3.1:8b-instruct-q4_K_M">Local Ollama Llama 3.1 8B (Balanced)</option>
+                                <option value="ollama:deepseek-r1:8b">Local Ollama DeepSeek R1 8B</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="output-container" id="output-box">
+                    <div class="placeholder-msg">
+                        <h3>Multi-Agent Cost Autopilot & Real-Time Gateway</h3>
+                        <p>Deconstructs complex goals across Supervisor, Code, Analysis, Writing, Research, and Computer Vision specialists.</p>
+                        
+                        <div class="sample-chips">
+                            <button class="chip" onclick="setPrompt('Build a high-performance FastAPI microservice with SQLite CRUD, JWT authentication, and rate limiting')">🚀 Build Full API</button>
+                            <button class="chip" onclick="setPrompt('Correct the grammar in the sentence: Write a complex code to train xgboost model with cross validation')">✏️ Grammar Check (Tier 1 Test)</button>
+                            <button class="chip" onclick="setPrompt('Design a YOLOv8 real-time edge obstacle detection and tracking architecture for autonomous drones')">👁️ Vision Agent (YOLOv8)</button>
+                            <button class="chip" onclick="setPrompt('Compare Transformer Attention vs Mamba State Space Models for long-context sequence modeling')">🔬 Research Agent</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Footer -->
+                <div class="input-dock">
+                    <textarea id="prompt-input" rows="2" placeholder="Describe what you want the multi-agent team to build..."></textarea>
+                    <button class="btn btn-primary" id="btn-run">
+                        <span>Dispatch Tasks</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
