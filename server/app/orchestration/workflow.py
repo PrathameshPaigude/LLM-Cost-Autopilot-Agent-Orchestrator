@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Any, Callable, Optional
 from .state import WorkflowState
 from .supervisor import supervisor
 from .reviewer import reviewer
@@ -27,8 +27,14 @@ class OrchestrationEngine:
         user_prompt: str, 
         force_offline: Optional[bool] = None,
         provider_override: Optional[str] = None,
-        model_override: Optional[str] = None
+        model_override: Optional[str] = None,
+        event_callback: Optional[Callable[[dict[str, Any]], None]] = None,
     ) -> WorkflowState:
+        def emit(event_type: str, **payload: Any) -> None:
+            if event_callback:
+                event_callback({"type": event_type, **payload})
+
+        emit("workflow_stage", stage="planning", message="Supervisor is decomposing the goal")
         # Step 1: Supervisor decomposes prompt into DAG of subtasks
         state = supervisor.plan_workflow(
             user_prompt=user_prompt, 
@@ -37,13 +43,29 @@ class OrchestrationEngine:
             model_override=model_override
         )
         state.status = "executing"
+        emit(
+            "plan_created",
+            workflow_id=state.workflow_id,
+            plan_overview=state.plan_overview,
+            subtasks=[task.model_dump() for task in state.subtasks],
+        )
 
         accumulated_context = f"Project Goal: {user_prompt}\nPlan: {state.plan_overview}\n"
 
         # Step 2: Execute specialist nodes sequentially (intercepted by Gateway)
-        for task in state.subtasks:
+        for index, task in enumerate(state.subtasks):
             agent = SPECIALIST_MAP.get(task.assigned_agent, code_agent)
             task.status = "in_progress"
+            state.current_step = index + 1
+            emit(
+                "task_started",
+                workflow_id=state.workflow_id,
+                task_id=task.task_id,
+                task_index=index,
+                total_tasks=len(state.subtasks),
+                assigned_agent=task.assigned_agent,
+                description=task.description,
+            )
             
             result = agent.execute(
                 task_description=task.description, 
@@ -55,12 +77,24 @@ class OrchestrationEngine:
             task.output = result.get("response", "")
             task.complexity_score = result.get("complexity_score", 0.5)
             task.routed_tier = result.get("tier_used", "Tier 2")
+            task.routing_audit = result.get("routing_audit", {})
             task.status = "completed"
+            emit(
+                "task_completed",
+                workflow_id=state.workflow_id,
+                task_id=task.task_id,
+                task_index=index,
+                assigned_agent=task.assigned_agent,
+                complexity_score=task.complexity_score,
+                routed_tier=task.routed_tier,
+                routing_audit=task.routing_audit,
+            )
 
             accumulated_context += f"\nOutput from {task.assigned_agent} on '{task.description}':\n{task.output}\n"
 
         # Step 3: Reviewer evaluates confidence and synthesizes final output
         state.status = "review"
+        emit("workflow_stage", stage="review", message="Reviewer is checking the specialist outputs")
         reviewed_state = reviewer.review_and_synthesize(
             state=state,
             force_offline=force_offline,
@@ -74,6 +108,12 @@ class OrchestrationEngine:
             logger.warning(f"Workflow {reviewed_state.workflow_id} paused for Human Review (Confidence: {reviewed_state.confidence_score}).")
 
         reviewed_state.telemetry_summary = telemetry.get_summary()
+        emit(
+            "workflow_finished",
+            workflow_id=reviewed_state.workflow_id,
+            status=reviewed_state.status,
+            confidence_score=reviewed_state.confidence_score,
+        )
         return reviewed_state
 
 engine = OrchestrationEngine()

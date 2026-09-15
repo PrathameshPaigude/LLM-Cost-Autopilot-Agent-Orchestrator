@@ -177,4 +177,19 @@ The **Agent Orchestration Platform with Intelligent Cost Autopilot** solves this
 * **Gateway:** Created `gateway_autopilot.py` with intent-aware complexity scoring, local Ollama integration, and savings telemetry tracker.
 * **Documentation:** Created this `PROJECT_CHRONICLE.md` living ledger to preserve full conversation context, architecture designs, and rationale.
 
+### [v1.2.0] - 2026-09-15
+* **Background Workflow Jobs:** Added `server/app/orchestration/jobs.py` with a bounded thread pool and in-memory job registry. Long-running orchestration workflows now execute independently from the initial HTTP request and return a trackable `job_id` immediately.
+* **Live Progress Streaming:** Added workflow lifecycle callbacks in `workflow.py` for planning, plan creation, specialist task start/completion, review, and final status. Exposed Server-Sent Events through `GET /api/v1/workflow/jobs/{job_id}/events`.
+* **Workflow Job API:** Added `POST /api/v1/workflow/jobs` for asynchronous dispatch and `GET /api/v1/workflow/jobs/{job_id}` for status inspection. The existing synchronous `POST /api/v1/workflow/run` endpoint remains backward compatible.
+* **Dashboard Integration:** Updated `client/js/app.js` to consume the SSE stream and render live execution status, active specialists, queued subtasks, and completion state in the workflow sidebar.
+* **Reliability Behavior:** Added ordered `job_queued` and `job_started` lifecycle events, keep-alive SSE comments, and explicit `job_failed` events for worker exceptions.
+* **Verification:** Confirmed FastAPI import, Python compilation, dashboard JavaScript syntax, health endpoint availability, job creation, and live progress delivery through a real local Ollama workflow. The repository test command remains unavailable until `pytest` is installed in `.venv`.
+* **Known Scope:** Job state is currently in-memory and is lost on process restart. Progress streaming reports workflow events rather than token-by-token model output; persistent job storage, cancellation, and token streaming remain future work.
+
+### [v1.3.0] - 2026-09-15
+* **Routing Explainability Audit:** Added a structured `routing_audit` to every gateway response. Each decision now records whether it was automatic, cached, or manually overridden; the selected provider/model; the complexity score and classifier feature breakdown; privacy and redaction status; and the reason for the decision.
+* **Cost and Confidence Comparison:** Added estimated cost and confidence comparisons for local Ollama, Groq, Gemini Flash, GPT-4o-class, and Claude-class alternatives. The audit reports estimated GPT-4-class cost and estimated savings for the selected route, with an explicit disclaimer that these are illustrative estimates rather than billing records.
+* **Workflow Visibility:** Propagated routing audits into `AgentTask` state, live `task_completed` events, and the final workflow response. The dashboard now provides a per-task “Why this model?” disclosure with alternatives, confidence tradeoffs, complexity score, and savings estimate.
+* **Verification:** Confirmed backend compilation, dashboard JavaScript syntax, and direct audit generation including editing-intent reasoning and alternative comparisons.
+
 

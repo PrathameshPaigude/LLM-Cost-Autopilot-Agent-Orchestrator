@@ -16,6 +16,14 @@ from ..providers.openrouter_provider import openrouter_provider
 logger = logging.getLogger(__name__)
 
 class CostAutopilotRouter:
+    MODEL_COSTS = {
+        "Claude-class baseline": {"input": 15.0, "output": 75.0, "confidence": 0.94},
+        "GPT-4o-class baseline": {"input": 5.0, "output": 15.0, "confidence": 0.90},
+        "Gemini Flash": {"input": 0.075, "output": 0.30, "confidence": 0.82},
+        "Groq fast tier": {"input": 0.0, "output": 0.0, "confidence": 0.78},
+        "Ollama local": {"input": 0.0, "output": 0.0, "confidence": 0.70},
+    }
+
     def route_and_execute(
         self, 
         prompt: str, 
@@ -35,6 +43,10 @@ class CostAutopilotRouter:
         if not provider_override and not model_override:
             cached_result = cache.get(sanitized_prompt)
             if cached_result:
+                audit = self._build_audit(
+                    sanitized_prompt, agent_name, 0.0, "Tier 0 (Semantic Cache)", "Cache", "cache", 0, 0,
+                    is_offline_enforced, was_redacted, is_cached=True
+                )
                 telemetry.record_request("Tier 0 (Semantic Cache)", sanitized_prompt, cached_result, is_cache=True)
                 return {
                     "response": cached_result,
@@ -45,7 +57,8 @@ class CostAutopilotRouter:
                     "latency_seconds": round(time.time() - start_time, 4),
                     "is_cached": True,
                     "was_redacted": was_redacted,
-                    "privacy_mode": is_offline_enforced
+                    "privacy_mode": is_offline_enforced,
+                    "routing_audit": audit
                 }
 
         # 3. Complexity Classification (0.0 to 1.0)
@@ -140,8 +153,17 @@ class CostAutopilotRouter:
             cache.set(sanitized_prompt, response_text)
             telemetry.record_request(tier_used, sanitized_prompt, response_text, is_cache=False)
 
+        input_tokens = max(1, len(sanitized_prompt.split()) * 4 // 3)
+        output_tokens = max(1, len(response_text.split()) * 4 // 3)
+        audit = self._build_audit(
+            sanitized_prompt, agent_name, score, tier_used, provider_name, model_name,
+            input_tokens, output_tokens, is_offline_enforced, was_redacted,
+            is_cached=False, manual_override=bool(provider_override or model_override)
+        )
+
         return {
-            "response": response_text or "Analysis completed successfully.",
+            "response": response_text or "",
+            "error": "No provider returned a response." if not response_text else None,
             "complexity_score": score,
             "tier_used": tier_used,
             "model_name": model_name,
@@ -149,14 +171,84 @@ class CostAutopilotRouter:
             "latency_seconds": round(time.time() - start_time, 3),
             "is_cached": False,
             "was_redacted": was_redacted,
-            "privacy_mode": is_offline_enforced
+            "privacy_mode": is_offline_enforced,
+            "routing_audit": audit
         }
+
+    def _build_audit(
+        self, prompt: str, agent_name: str, score: float, tier: str, provider: str,
+        model: str, input_tokens: int, output_tokens: int, offline: bool,
+        redacted: bool, is_cached: bool, manual_override: bool = False
+    ) -> Dict[str, Any]:
+        features = classifier.extract_features(prompt, agent_name=agent_name)
+        estimated_baseline = self._estimate_cost("GPT-4o-class baseline", input_tokens, output_tokens)
+        selected_label = self._cost_label(provider, offline, is_cached)
+        selected_cost = self._estimate_cost(selected_label, input_tokens, output_tokens)
+        alternatives = []
+        for label, rates in self.MODEL_COSTS.items():
+            cost = self._estimate_cost(label, input_tokens, output_tokens)
+            alternatives.append({
+                "option": label,
+                "estimated_cost_usd": round(cost, 6),
+                "estimated_confidence": rates["confidence"],
+                "relative_savings_vs_claude_usd": round(max(0.0, estimated_baseline - cost), 6),
+            })
+        return {
+            "decision": "cache_hit" if is_cached else ("manual_override" if manual_override else "automatic"),
+            "reason": self._reason(score, features, offline, is_cached, manual_override),
+            "complexity": {
+                "score": score,
+                "tier": tier,
+                "features": features,
+            },
+            "selected": {
+                "provider": provider,
+                "model": model,
+                "estimated_cost_usd": round(selected_cost, 6),
+                "estimated_confidence": self.MODEL_COSTS[selected_label]["confidence"],
+            },
+            "alternatives": alternatives,
+            "estimated_gpt4_class_cost_usd": round(estimated_baseline, 6),
+            "estimated_savings_vs_gpt4_class_usd": round(max(0.0, estimated_baseline - selected_cost), 6),
+            "cost_basis": "Estimated using token counts and illustrative provider rates; not a billing record.",
+            "privacy_mode": offline,
+            "was_redacted": redacted,
+        }
+
+    def _cost_label(self, provider: str, offline: bool, is_cached: bool) -> str:
+        if is_cached:
+            return "Ollama local"
+        if offline or "Ollama" in provider:
+            return "Ollama local"
+        if "Gemini" in provider:
+            return "Gemini Flash"
+        if "Groq" in provider or "OpenRouter" in provider:
+            return "Groq fast tier"
+        return "GPT-4o-class baseline" if "OpenAI" in provider else "Ollama local"
+
+    def _estimate_cost(self, label: str, input_tokens: int, output_tokens: int) -> float:
+        rates = self.MODEL_COSTS[label]
+        return (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
+
+    @staticmethod
+    def _reason(score: float, features: Dict[str, Any], offline: bool, cached: bool, manual: bool) -> str:
+        if cached:
+            return "Exact cached response avoided a new model call."
+        if manual:
+            return "A provider or model override was explicitly selected by the user."
+        if offline:
+            return "Privacy mode forced local execution regardless of complexity."
+        if features["is_editing"]:
+            return "Editing intent reduced complexity despite any technical terms in the payload."
+        if features["has_deep_domain"]:
+            return "Advanced-domain signals increased the complexity score and favored deeper reasoning."
+        return f"Complexity score {score:.2f} matched the configured cost-aware execution tier."
 
     def _try_ollama(self, model: str, prompt: str, system: Optional[str]) -> str:
         try:
             return ollama_provider.generate(model=model, prompt=prompt, system_prompt=system)
         except Exception as e:
             logger.error(f"Local Ollama execution failed: {e}")
-            return f"Completed analysis for: {prompt[:80]}"
+            return ""
 
 router = CostAutopilotRouter()

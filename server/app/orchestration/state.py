@@ -7,6 +7,7 @@ class AgentTask(BaseModel):
     assigned_agent: str  # Research, Analysis, Code, Writing, CVSpecialist
     complexity_score: Optional[float] = None
     routed_tier: Optional[str] = None
+    routing_audit: Dict[str, Any] = Field(default_factory=dict)
     output: Optional[str] = None
     status: str = "pending"  # pending, in_progress, completed, failed
 

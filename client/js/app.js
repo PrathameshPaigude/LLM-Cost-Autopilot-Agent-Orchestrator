@@ -129,7 +129,7 @@ btnRun.addEventListener("click", async () => {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/workflow/run`, {
+        const response = await fetch(`${API_BASE}/workflow/jobs`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -140,9 +140,11 @@ btnRun.addEventListener("click", async () => {
             })
         });
 
-        if (!response.ok) throw new Error("Workflow execution returned an error");
+        if (!response.ok) throw new Error("Workflow job could not be created");
 
-        const data = await response.json();
+        const job = await response.json();
+        const data = await streamWorkflowJob(job.job_id);
+        if (!data) throw new Error("Workflow completed without a result");
         renderWorkflowResult(data);
         await updateTelemetry();
 
@@ -160,6 +162,64 @@ btnRun.addEventListener("click", async () => {
     }
 });
 
+function streamWorkflowJob(jobId) {
+    return new Promise((resolve, reject) => {
+        const events = new EventSource(`${API_BASE}/workflow/jobs/${jobId}/events`);
+        let result = null;
+
+        events.onmessage = (message) => {
+            const event = JSON.parse(message.data);
+            renderProgressEvent(event);
+            if (event.type === "job_completed") {
+                result = event.workflow;
+                events.close();
+                resolve(result);
+            } else if (event.type === "job_failed") {
+                events.close();
+                reject(new Error(event.error || "Workflow execution failed"));
+            }
+        };
+
+        events.onerror = () => {
+            events.close();
+            reject(new Error("Lost connection to workflow progress stream"));
+        };
+    });
+}
+
+function renderProgressEvent(event) {
+    if (event.type === "workflow_stage") {
+        workflowStatus.textContent = event.stage.toUpperCase();
+        planOverviewText.textContent = event.message;
+    } else if (event.type === "plan_created") {
+        workflowStatus.textContent = "EXECUTING";
+        planOverviewText.textContent = event.plan_overview || "Plan created";
+        subtasksList.innerHTML = (event.subtasks || []).map(task => `
+            <div class="task-card" data-task-id="${escapeHtml(task.task_id)}">
+                <div class="task-card-header">
+                    <span class="agent-name">${escapeHtml(task.assigned_agent)}</span>
+                    <span class="tier-pill">Queued</span>
+                </div>
+                <div class="task-desc">${escapeHtml(task.description)}</div>
+                <div class="task-meta"><span>Waiting</span><span>...</span></div>
+            </div>
+        `).join("");
+    } else if (event.type === "task_started") {
+        currentAgentTag.textContent = event.assigned_agent;
+        workflowStatus.textContent = `TASK ${event.task_index + 1}/${event.total_tasks}`;
+        planOverviewText.textContent = event.description;
+    } else if (event.type === "task_completed") {
+        planOverviewText.textContent = `${event.assigned_agent} completed: ${event.routed_tier}`;
+        const card = document.querySelector(`[data-task-id="${event.task_id}"]`);
+        if (card && event.routing_audit) {
+            card.querySelector(".task-meta").insertAdjacentHTML("beforeend", renderRoutingAudit(event.routing_audit));
+        }
+    } else if (event.type === "workflow_finished") {
+        workflowStatus.textContent = event.status.toUpperCase();
+        currentAgentTag.textContent = "Reviewer";
+    }
+}
+
 function renderWorkflowResult(data) {
     workflowStatus.textContent = (data.status || "COMPLETED").toUpperCase();
     currentAgentTag.textContent = "Reviewer";
@@ -171,6 +231,7 @@ function renderWorkflowResult(data) {
         data.subtasks.forEach((task) => {
             const card = document.createElement("div");
             card.className = "task-card";
+            card.dataset.taskId = task.task_id;
             card.innerHTML = `
                 <div class="task-card-header">
                     <span class="agent-name">${escapeHtml(task.assigned_agent)}</span>
@@ -181,6 +242,7 @@ function renderWorkflowResult(data) {
                     <span>${escapeHtml(task.routed_tier || 'Tier 2')}</span>
                     <span style="color: #34d399; font-weight: 600;">✓ Done</span>
                 </div>
+                ${renderRoutingAudit(task.routing_audit)}
             `;
             subtasksList.appendChild(card);
         });
@@ -201,6 +263,29 @@ function renderWorkflowResult(data) {
         <div class="markdown-content">
             ${renderedHtml}
         </div>
+    `;
+}
+
+function renderRoutingAudit(audit) {
+    if (!audit || !audit.selected) return "";
+    const complexity = audit.complexity || {};
+    const selected = audit.selected;
+    const alternatives = (audit.alternatives || [])
+        .filter(option => option.option !== selected.provider)
+        .slice(0, 3)
+        .map(option => `<li>${escapeHtml(option.option)}: $${option.estimated_cost_usd.toFixed(6)} / confidence ${(option.estimated_confidence * 100).toFixed(0)}%</li>`)
+        .join("");
+    return `
+        <details class="routing-audit">
+            <summary><span class="audit-label">WHY THIS MODEL</span> Score ${(complexity.score ?? 0).toFixed(2)} · Saved $${(audit.estimated_savings_vs_gpt4_class_usd || 0).toFixed(6)}</summary>
+            <div class="audit-content">
+                <p>${escapeHtml(audit.reason || "Cost-aware routing decision")}</p>
+                <p><strong>Selected:</strong> ${escapeHtml(selected.provider)} / ${escapeHtml(selected.model)} · estimated $${selected.estimated_cost_usd.toFixed(6)} · confidence ${(selected.estimated_confidence * 100).toFixed(0)}%</p>
+                <p><strong>GPT-4-class comparison:</strong> $${(audit.estimated_gpt4_class_cost_usd || 0).toFixed(6)}</p>
+                <strong>Alternatives:</strong><ul>${alternatives}</ul>
+                <small>${escapeHtml(audit.cost_basis || "Estimated cost comparison")}</small>
+            </div>
+        </details>
     `;
 }
 

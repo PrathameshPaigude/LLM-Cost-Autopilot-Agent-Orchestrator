@@ -26,7 +26,7 @@ class OllamaProvider:
         except Exception:
             return []
 
-    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: int = 60) -> str:
+    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: int = 180) -> str:
         url = f"{self.base_url}/api/generate"
         payload = {
             "model": model,
@@ -43,7 +43,10 @@ class OllamaProvider:
             response = requests.post(url, json=payload, timeout=timeout)
             if response.status_code == 200:
                 data = response.json()
-                return data.get("response", "").strip()
+                result = data.get("response", "").strip()
+                if not result:
+                    raise RuntimeError("Ollama returned an empty response.")
+                return result
             else:
                 logger.error(f"Ollama returned error {response.status_code}: {response.text}")
                 raise RuntimeError(f"Ollama error: {response.text}")

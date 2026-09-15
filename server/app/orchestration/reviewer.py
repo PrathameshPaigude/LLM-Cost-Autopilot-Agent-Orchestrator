@@ -14,7 +14,12 @@ class ReviewerAgent:
             "1. Output ONLY the polished, final answer directly in clean GitHub markdown.\n"
             "2. DO NOT output JSON wrapper objects, review notes, or meta commentary.\n"
             "3. DO NOT include phrases like 'Here is the synthesis' or 'Review Notes:'.\n"
-            "4. Provide thorough, well-structured, directly usable content with clear headings, explanations, and code examples if applicable."
+            "4. Provide thorough, well-structured, directly usable content with clear headings, explanations, and code examples if applicable.\n"
+            "5. Preserve every explicit requirement from the User Goal.\n"
+            "6. For programming tasks, verify that every requested file is present, code blocks are complete, "
+            "imports and declarations are included, examples match the requested language/version, and compile "
+            "commands are accurate. Do not silently simplify or change the requested deliverable.\n"
+            "7. If specialist findings are incomplete, use the User Goal to fill the gap and return a complete answer."
         )
 
     def review_and_synthesize(
@@ -50,11 +55,28 @@ class ReviewerAgent:
         # Clean any accidental JSON wrapping from over-obedient models
         clean_output = self._extract_clean_text(raw_response)
         
-        state.confidence_score = 0.95
+        state.confidence_score = self._estimate_confidence(state, clean_output)
         state.final_output = clean_output
-        state.status = "completed"
+        state.status = "completed" if state.confidence_score >= settings.CONFIDENCE_THRESHOLD else "pending_hitl"
 
         return state
+
+    def _estimate_confidence(self, state: WorkflowState, output: str) -> float:
+        if not output or output == "No output generated.":
+            return 0.0
+
+        score = 0.55
+        completed_tasks = sum(task.status == "completed" for task in state.subtasks)
+        if state.subtasks and completed_tasks == len(state.subtasks):
+            score += 0.20
+        if len(output.strip()) >= 200:
+            score += 0.10
+        if "```" in output:
+            score += 0.05
+        if "error" in output.lower() and "without error" not in output.lower():
+            score -= 0.10
+
+        return round(max(0.0, min(0.95, score)), 2)
 
     def _extract_clean_text(self, text: str) -> str:
         if not text:

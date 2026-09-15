@@ -1,14 +1,19 @@
 import os
+import json
+import queue
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from .core.config import settings
 from .core.telemetry import telemetry
 from .gateway.router import router
 from .orchestration.workflow import engine
+from .orchestration.jobs import jobs
 from .orchestration.hitl import hitl_manager
 from .providers.gemini_provider import gemini_provider
 from .providers.openai_provider import openai_provider
@@ -46,6 +51,10 @@ class WorkflowRequest(BaseModel):
     force_offline: Optional[bool] = None
     provider_override: Optional[str] = None
     model_override: Optional[str] = None
+
+
+class WorkflowJobRequest(WorkflowRequest):
+    pass
 
 
 class HITLActionRequest(BaseModel):
@@ -192,6 +201,51 @@ def run_orchestration_workflow(req: WorkflowRequest):
     )
     return state.dict()
 
+
+@app.post("/api/v1/workflow/jobs", status_code=202)
+def create_workflow_job(req: WorkflowJobRequest):
+    """Starts a workflow in the background and returns a trackable job ID."""
+    return jobs.create_job(
+        user_prompt=req.user_prompt,
+        force_offline=req.force_offline,
+        provider_override=req.provider_override,
+        model_override=req.model_override,
+    )
+
+
+@app.get("/api/v1/workflow/jobs/{job_id}")
+def get_workflow_job(job_id: str):
+    """Returns the latest state of a background workflow job."""
+    job = jobs.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Workflow job not found.")
+    return job
+
+
+@app.get("/api/v1/workflow/jobs/{job_id}/events")
+def stream_workflow_job(job_id: str):
+    """Streams workflow progress as Server-Sent Events until the job finishes."""
+    event_queue = jobs.subscribe(job_id)
+    if not event_queue:
+        raise HTTPException(status_code=404, detail="Workflow job not found.")
+
+    def event_stream():
+        while True:
+            try:
+                event = event_queue.get(timeout=15)
+            except queue.Empty:
+                yield ": keep-alive\n\n"
+                continue
+            yield f"data: {json.dumps(event)}\n\n"
+            if event.get("type") in {"job_completed", "job_failed"}:
+                break
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
 @app.get("/api/v1/telemetry")
 def get_telemetry():
     """Retrieves real-time token, dollar, and compute energy savings."""
@@ -225,6 +279,17 @@ def set_privacy_mode(req: PrivacyToggleRequest):
     """Toggles offline privacy mode globally."""
     settings.PRIVACY_MODE = req.privacy_mode
     return {"privacy_mode": settings.PRIVACY_MODE, "message": "Updated global privacy enforcement mode."}
+
+# Serve static client UI — must be mounted AFTER all API routes
+_client_dir = Path(__file__).resolve().parents[2] / "client"
+if _client_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_client_dir)), name="static")
+    app.mount("/css", StaticFiles(directory=str(_client_dir / "css")), name="css")
+    app.mount("/js", StaticFiles(directory=str(_client_dir / "js")), name="js")
+
+    @app.get("/", include_in_schema=False)
+    def serve_ui():
+        return FileResponse(str(_client_dir / "index.html"))
 
 if __name__ == "__main__":
     import uvicorn
