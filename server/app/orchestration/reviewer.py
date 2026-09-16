@@ -27,7 +27,8 @@ class ReviewerAgent:
         state: WorkflowState,
         force_offline: Optional[bool] = None,
         provider_override: Optional[str] = None,
-        model_override: Optional[str] = None
+        model_override: Optional[str] = None,
+        workflow_id: Optional[str] = None,
     ) -> WorkflowState:
         # Aggregate outputs from all completed subtasks
         context_parts = []
@@ -47,7 +48,8 @@ class ReviewerAgent:
             system_prompt=self.system_prompt,
             force_offline=force_offline,
             provider_override=provider_override,
-            model_override=model_override
+            model_override=model_override,
+            workflow_id=workflow_id,
         )
 
         raw_response = res.get("response", "").strip()
@@ -56,6 +58,11 @@ class ReviewerAgent:
         clean_output = self._extract_clean_text(raw_response)
         
         state.confidence_score = self._estimate_confidence(state, clean_output)
+        from ..core.ledger import EventType, append_entry
+        append_entry(
+            state.workflow_id, EventType.REVIEW_COMPLETED,
+            {"confidence_score": state.confidence_score, "status": "pending_hitl" if state.confidence_score < settings.CONFIDENCE_THRESHOLD else "completed"},
+        )
         state.final_output = clean_output
         state.status = "completed" if state.confidence_score >= settings.CONFIDENCE_THRESHOLD else "pending_hitl"
 

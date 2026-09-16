@@ -14,7 +14,8 @@ class CVSpecialist:
         context: str = "", 
         force_offline: Optional[bool] = None,
         provider_override: Optional[str] = None,
-        model_override: Optional[str] = None
+        model_override: Optional[str] = None,
+        workflow_id: Optional[str] = None,
     ) -> dict:
         prompt = f"Context: {context}\n\nVision Task: {task_description}" if context else task_description
         return router.route_and_execute(
@@ -23,7 +24,8 @@ class CVSpecialist:
             system_prompt=self.system_prompt,
             force_offline=force_offline,
             provider_override=provider_override,
-            model_override=model_override
+            model_override=model_override,
+            workflow_id=workflow_id,
         )
 
 cv_agent = CVSpecialist()

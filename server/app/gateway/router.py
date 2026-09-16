@@ -1,5 +1,6 @@
 import time
 import logging
+import hashlib
 from typing import Dict, Any, Optional
 
 from ..core.config import settings
@@ -12,6 +13,7 @@ from ..providers.groq_provider import groq_provider
 from ..providers.gemini_provider import gemini_provider
 from ..providers.openai_provider import openai_provider
 from ..providers.openrouter_provider import openrouter_provider
+from ..core.ledger import EventType, append_entry
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +34,46 @@ class CostAutopilotRouter:
         force_offline: Optional[bool] = None,
         provider_override: Optional[str] = None,
         model_override: Optional[str] = None
+        ,workflow_id: Optional[str] = None
     ) -> Dict[str, Any]:
         start_time = time.time()
         is_offline_enforced = settings.PRIVACY_MODE if force_offline is None else force_offline
+        score: Optional[float] = None
 
         # 1. PII Redaction
         sanitized_prompt, was_redacted = redactor.sanitize(prompt)
+        prompt_hash = hashlib.sha256(sanitized_prompt.encode("utf-8")).hexdigest()
+
+        def invoke(provider: str, model: str, tier: str, reason: str, fn):
+            called_entry = None
+            if workflow_id:
+                append_entry(workflow_id, EventType.TASK_ROUTED, {
+                    "agent_name": agent_name, "provider": provider, "model": model,
+                    "tier": tier, "complexity_score": score,
+                    "reason": reason,
+                })
+                called_entry = append_entry(workflow_id, EventType.PROVIDER_CALLED, {
+                    "provider": provider, "model": model, "tier": tier,
+                    "agent_name": agent_name, "complexity_score": score,
+                    "redacted_prompt_hash": prompt_hash,
+                })
+            try:
+                response = fn()
+                status = "success" if response else "empty_response"
+            except Exception:
+                if workflow_id:
+                    append_entry(workflow_id, EventType.PROVIDER_RESPONSE, {
+                        "provider": provider, "model": model, "tier": tier,
+                        "status": "error", "redacted_prompt_hash": prompt_hash,
+                    }, parent_entry_id=called_entry)
+                raise
+            if workflow_id:
+                append_entry(workflow_id, EventType.PROVIDER_RESPONSE, {
+                    "provider": provider, "model": model, "tier": tier, "status": status,
+                    "response_hash": hashlib.sha256((response or "").encode("utf-8")).hexdigest(),
+                    "response_length": len(response or ""),
+                }, parent_entry_id=called_entry)
+            return response
 
         # 2. Semantic Cache Check (Tier 0)
         if not provider_override and not model_override:
@@ -48,6 +84,14 @@ class CostAutopilotRouter:
                     is_offline_enforced, was_redacted, is_cached=True
                 )
                 telemetry.record_request("Tier 0 (Semantic Cache)", sanitized_prompt, cached_result, is_cache=True)
+                telemetry.record_route_observation(
+                    tier=audit["complexity"]["tier"],
+                    provider="Cache",
+                    model="cache",
+                    estimated_cost_usd=audit["selected"]["estimated_cost_usd"],
+                    confidence=audit["selected"]["estimated_confidence"],
+                    complexity_score=0.0,
+                )
                 return {
                     "response": cached_result,
                     "complexity_score": 0.0,
@@ -78,27 +122,27 @@ class CostAutopilotRouter:
                     model_name = model_override or "openai/gpt-oss-20b"
                     provider_name = "Groq Cloud"
                     tier_used = "Manual (Groq Cloud)"
-                    response_text = groq_provider.generate(model_name, sanitized_prompt, system_prompt)
+                    response_text = invoke("Groq Cloud", model_name, tier_used, "manual provider override", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
                 elif prov == "gemini" and gemini_provider.is_configured():
                     model_name = model_override or "gemini-flash-latest"
                     provider_name = "Google Gemini"
                     tier_used = "Manual (Google Gemini)"
-                    response_text = gemini_provider.generate(model_name, sanitized_prompt, system_prompt)
+                    response_text = invoke("Google Gemini", model_name, tier_used, "manual provider override", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
                 elif prov == "openai" and openai_provider.is_configured():
                     model_name = model_override or "gpt-4o-mini"
                     provider_name = "OpenAI"
                     tier_used = "Manual (OpenAI)"
-                    response_text = openai_provider.generate(model_name, sanitized_prompt, system_prompt)
+                    response_text = invoke("OpenAI", model_name, tier_used, "manual provider override", lambda: openai_provider.generate(model_name, sanitized_prompt, system_prompt))
                 elif prov == "openrouter" and openrouter_provider.is_configured():
                     model_name = model_override or "deepseek/deepseek-r1:free"
                     provider_name = "OpenRouter"
                     tier_used = "Manual (OpenRouter)"
-                    response_text = openrouter_provider.generate(model_name, sanitized_prompt, system_prompt)
+                    response_text = invoke("OpenRouter", model_name, tier_used, "manual provider override", lambda: openrouter_provider.generate(model_name, sanitized_prompt, system_prompt))
                 elif prov == "ollama":
                     model_name = model_override or settings.LOCAL_TIER2_MODEL
                     provider_name = "Ollama (Local)"
                     tier_used = "Manual (Local Ollama)"
-                    response_text = ollama_provider.generate(model_name, sanitized_prompt, system_prompt)
+                    response_text = invoke("Ollama (Local)", model_name, tier_used, "manual provider override", lambda: ollama_provider.generate(model_name, sanitized_prompt, system_prompt))
             except Exception as e:
                 logger.warning(f"Manual override provider {prov} failed: {e}. Falling back to dynamic matrix...")
 
@@ -128,7 +172,7 @@ class CostAutopilotRouter:
                 if groq_provider.is_configured():
                     try:
                         provider_name = "Groq Cloud"
-                        response_text = groq_provider.generate(model_name, sanitized_prompt, system_prompt)
+                        response_text = invoke(provider_name, model_name, tier_used, "complexity score matched automatic tier", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
                     except Exception as e:
                         logger.warning(f"Groq failed: {e}")
 
@@ -137,7 +181,7 @@ class CostAutopilotRouter:
                     try:
                         provider_name = "Google Gemini"
                         model_name = "gemini-flash-latest"
-                        response_text = gemini_provider.generate(model_name, sanitized_prompt, system_prompt)
+                        response_text = invoke(provider_name, model_name, tier_used, "Groq fallback", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
                     except Exception as e:
                         logger.warning(f"Gemini fallback failed: {e}")
 
@@ -146,7 +190,7 @@ class CostAutopilotRouter:
                     provider_name = "Ollama (Local Fallback)"
                     local_model = settings.LOCAL_TIER1_MODEL if score < settings.ROUTING_TIER1_MAX else settings.LOCAL_TIER2_MODEL
                     model_name = local_model
-                    response_text = self._try_ollama(local_model, sanitized_prompt, system_prompt)
+                    response_text = invoke(provider_name, model_name, tier_used, "cloud provider fallback", lambda: self._try_ollama(local_model, sanitized_prompt, system_prompt))
 
         # 5. Populate Cache & Telemetry
         if response_text:
@@ -159,6 +203,14 @@ class CostAutopilotRouter:
             sanitized_prompt, agent_name, score, tier_used, provider_name, model_name,
             input_tokens, output_tokens, is_offline_enforced, was_redacted,
             is_cached=False, manual_override=bool(provider_override or model_override)
+        )
+        telemetry.record_route_observation(
+            tier=tier_used,
+            provider=provider_name,
+            model=model_name,
+            estimated_cost_usd=audit["selected"]["estimated_cost_usd"],
+            confidence=audit["selected"]["estimated_confidence"],
+            complexity_score=score,
         )
 
         return {

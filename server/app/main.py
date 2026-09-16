@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from .core.config import settings
 from .core.telemetry import telemetry
+from .core.ledger import ledger
 from .gateway.router import router
 from .orchestration.workflow import engine
 from .orchestration.jobs import jobs
@@ -250,6 +251,21 @@ def stream_workflow_job(job_id: str):
 def get_telemetry():
     """Retrieves real-time token, dollar, and compute energy savings."""
     return telemetry.get_summary()
+
+@app.get("/api/v1/telemetry/pareto")
+def get_telemetry_pareto():
+    """Returns recent routing tradeoffs and reviewed quality outcomes."""
+    return telemetry.get_pareto()
+
+@app.get("/api/v1/workflow/{workflow_id}/ledger")
+def get_workflow_ledger(workflow_id: str):
+    """Returns the ordered evidence ledger and its tamper check for a workflow."""
+    entries = ledger.get_workflow_entries(workflow_id)
+    return {
+        "workflow_id": workflow_id,
+        "entries": [entry.to_dict() for entry in entries],
+        "verify_chain": ledger.verify_chain(workflow_id),
+    }
 
 @app.get("/api/v1/hitl/pending")
 def list_pending_reviews():

@@ -18,11 +18,12 @@ class SupervisorAgent:
     def plan_workflow(
         self, 
         user_prompt: str, 
+        workflow_id: Optional[str] = None,
         force_offline: Optional[bool] = None,
         provider_override: Optional[str] = None,
         model_override: Optional[str] = None
     ) -> WorkflowState:
-        workflow_id = f"wf-{uuid.uuid4().hex[:8]}"
+        workflow_id = workflow_id or f"wf-{uuid.uuid4().hex[:8]}"
         state = WorkflowState(workflow_id=workflow_id, user_prompt=user_prompt)
 
         # Call Gateway for Planning
@@ -32,7 +33,8 @@ class SupervisorAgent:
             system_prompt=self.system_prompt,
             force_offline=force_offline,
             provider_override=provider_override,
-            model_override=model_override
+            model_override=model_override,
+            workflow_id=workflow_id,
         )
 
         try:

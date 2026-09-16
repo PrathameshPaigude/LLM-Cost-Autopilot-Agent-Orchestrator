@@ -52,3 +52,6 @@ htmlcov/
 # ChromaDB local data
 chroma_db/
 .chroma/
+
+# Append-only runtime evidence ledger
+data/

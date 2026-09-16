@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agent Orchestrator & LLM Cost Autopilot</title>
-    <link rel="stylesheet" href="css/styles.css?v=1.3.0">
+    <link rel="stylesheet" href="css/styles.css?v=1.3.1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 </head>
@@ -70,6 +70,26 @@
                 <div class="subtasks-container" id="subtasks-list">
                     <div class="empty-state">No active workflow. Enter a task below to decompose and execute.</div>
                 </div>
+
+                <section class="pareto-panel" aria-labelledby="pareto-title">
+                    <div class="pareto-header">
+                        <div>
+                            <p class="eyebrow">Product signal</p>
+                            <h2 id="pareto-title">Cost / quality Pareto</h2>
+                        </div>
+                        <div class="pareto-summary" id="pareto-summary">Waiting for routed traffic</div>
+                    </div>
+                    <div class="pareto-chart-wrap">
+                        <canvas id="pareto-chart" aria-label="Scatter plot of estimated cost versus confidence over time"></canvas>
+                        <div class="pareto-empty" id="pareto-empty">Run a task to populate the live tradeoff view.</div>
+                    </div>
+                    <div class="pareto-legend">
+                        <span><i class="legend-dot tier-1"></i>Tier 1</span>
+                        <span><i class="legend-dot tier-2"></i>Tier 2</span>
+                        <span><i class="legend-dot tier-3"></i>Tier 3</span>
+                        <span><i class="legend-diamond"></i>Reviewed outcome</span>
+                    </div>
+                </section>
 
                 <!-- HITL Approval Box (Hidden by default) -->
                 <div class="hitl-box" id="hitl-panel" style="display: none;">
@@ -144,6 +164,6 @@
         </main>
     </div>
 
-    <script src="js/app.js?v=1.3.0"></script>
+    <script src="js/app.js?v=1.3.1"></script>
 </body>
 </html>

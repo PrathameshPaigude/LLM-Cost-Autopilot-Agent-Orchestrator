@@ -15,6 +15,9 @@ const modeSelect = document.getElementById("mode-select");
 const statSaved = document.getElementById("stat-saved");
 const statTokens = document.getElementById("stat-tokens");
 const statEnergy = document.getElementById("stat-energy");
+const paretoChart = document.getElementById("pareto-chart");
+const paretoEmpty = document.getElementById("pareto-empty");
+const paretoSummary = document.getElementById("pareto-summary");
 
 // Provider Status Elements
 const pillGemini = document.getElementById("pill-gemini");
@@ -77,6 +80,71 @@ async function updateTelemetry() {
             statEnergy.textContent = `${data.energy_saved_watt_hours.toFixed(1)} Wh`;
         }
     } catch (e) {}
+}
+
+async function updatePareto() {
+    try {
+        const res = await fetch(`${API_BASE}/telemetry/pareto`);
+        if (res.ok) renderPareto(await res.json());
+    } catch (e) {}
+}
+
+function renderPareto(data) {
+    const points = data.points || [];
+    paretoEmpty.hidden = points.length > 0;
+    paretoSummary.textContent = points.length
+        ? `${data.route_count} routes · ${data.review_count} reviewed · live window ${data.window_size}`
+        : "Waiting for routed traffic";
+    const context = paretoChart.getContext("2d");
+    const width = paretoChart.clientWidth;
+    const height = paretoChart.clientHeight;
+    const scale = window.devicePixelRatio || 1;
+    paretoChart.width = width * scale;
+    paretoChart.height = height * scale;
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    context.clearRect(0, 0, width, height);
+
+    const padding = { top: 12, right: 18, bottom: 28, left: 42 };
+    const plotWidth = Math.max(1, width - padding.left - padding.right);
+    const plotHeight = Math.max(1, height - padding.top - padding.bottom);
+    const maxCost = Math.max(0.00001, ...points.map(point => point.estimated_cost_usd || 0)) * 1.15;
+    const x = value => padding.left + ((value || 0) / maxCost) * plotWidth;
+    const y = value => padding.top + (1 - Math.min(1, Math.max(0, value || 0))) * plotHeight;
+
+    context.strokeStyle = "rgba(148, 163, 184, 0.16)";
+    context.fillStyle = "#94a3b8";
+    context.font = "10px 'Fira Code', monospace";
+    context.lineWidth = 1;
+    [0, 0.5, 1].forEach(value => {
+        const yPos = y(value);
+        context.beginPath(); context.moveTo(padding.left, yPos); context.lineTo(width - padding.right, yPos); context.stroke();
+        context.fillText(`${Math.round(value * 100)}%`, 5, yPos + 3);
+    });
+    context.fillText("estimated cost / call", padding.left, height - 7);
+    context.fillText(`$${maxCost.toFixed(5)}`, width - 70, height - 7);
+
+    points.forEach(point => {
+        const pointX = x(point.estimated_cost_usd);
+        const confidence = point.kind === "review" ? point.quality_confidence : point.confidence;
+        const pointY = y(confidence);
+        context.fillStyle = point.kind === "review" ? "#f8fafc" : tierColor(point.tier);
+        context.strokeStyle = point.kind === "review" ? "#fbbf24" : "rgba(9, 13, 22, 0.8)";
+        context.lineWidth = 1.5;
+        context.beginPath();
+        if (point.kind === "review") {
+            context.moveTo(pointX, pointY - 5); context.lineTo(pointX + 5, pointY);
+            context.lineTo(pointX, pointY + 5); context.lineTo(pointX - 5, pointY); context.closePath();
+        } else {
+            context.arc(pointX, pointY, 4, 0, Math.PI * 2);
+        }
+        context.fill(); context.stroke();
+    });
+}
+
+function tierColor(tier) {
+    if ((tier || "").includes("Tier 1")) return "#34d399";
+    if ((tier || "").includes("Tier 2")) return "#38bdf8";
+    return "#c084fc";
 }
 
 // Toggle Privacy Mode
@@ -374,5 +442,8 @@ function escapeHtml(text) {
 // Initial Polling
 setInterval(updateHealthAndProviders, 4000);
 setInterval(updateTelemetry, 4000);
+setInterval(updatePareto, 4000);
 updateHealthAndProviders();
 updateTelemetry();
+updatePareto();
+window.addEventListener("resize", updatePareto);
