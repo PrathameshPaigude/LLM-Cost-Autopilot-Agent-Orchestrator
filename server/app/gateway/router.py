@@ -9,6 +9,7 @@ from .classifier import classifier
 from .cache import cache
 from .redactor import redactor
 from ..providers.ollama_provider import ollama_provider
+from ..providers.ollama_provider import OllamaTimeoutError
 from ..providers.groq_provider import groq_provider
 from ..providers.gemini_provider import gemini_provider
 from ..providers.openai_provider import openai_provider
@@ -33,12 +34,20 @@ class CostAutopilotRouter:
         system_prompt: Optional[str] = None,
         force_offline: Optional[bool] = None,
         provider_override: Optional[str] = None,
-        model_override: Optional[str] = None
-        ,workflow_id: Optional[str] = None
+        model_override: Optional[str] = None,
+        workflow_id: Optional[str] = None,
+        execution_mode: Optional[str] = None,
+        force_cloud: bool = False,
+        classifier_debug: bool = False
     ) -> Dict[str, Any]:
         start_time = time.time()
-        is_offline_enforced = settings.PRIVACY_MODE if force_offline is None else force_offline
+        requested_mode = (execution_mode or "auto").lower()
+        if requested_mode not in {"auto", "offline", "cloud"}:
+            raise ValueError("execution_mode must be one of: auto, offline, cloud")
+        is_offline_enforced = settings.PRIVACY_MODE or force_offline is True or requested_mode == "offline"
+        actual_mode = "offline" if is_offline_enforced else ("cloud" if force_cloud or requested_mode == "cloud" else "auto")
         score: Optional[float] = None
+        error_message: Optional[str] = None
 
         # 1. PII Redaction
         sanitized_prompt, was_redacted = redactor.sanitize(prompt)
@@ -77,6 +86,7 @@ class CostAutopilotRouter:
 
         # 2. Semantic Cache Check (Tier 0)
         if not provider_override and not model_override:
+            cache_key = cache.key_for(sanitized_prompt)
             cached_result = cache.get(sanitized_prompt)
             if cached_result:
                 audit = self._build_audit(
@@ -102,11 +112,17 @@ class CostAutopilotRouter:
                     "is_cached": True,
                     "was_redacted": was_redacted,
                     "privacy_mode": is_offline_enforced,
+                    "execution_mode": actual_mode,
+                    "cache_key_used": cache_key,
+                    "raw_output_preview": cached_result[:200],
+                    **({"classifier_debug": classifier.explain(sanitized_prompt, agent_name)} if classifier_debug else {}),
                     "routing_audit": audit
                 }
 
         # 3. Complexity Classification (0.0 to 1.0)
         score = classifier.predict_score(sanitized_prompt, agent_name=agent_name)
+        classifier_explanation = classifier.explain(sanitized_prompt, agent_name) if classifier_debug else None
+        cache_key = cache.key_for(sanitized_prompt)
 
         # 4. Model Selection & Execution
         tier_used = ""
@@ -147,50 +163,74 @@ class CostAutopilotRouter:
                 logger.warning(f"Manual override provider {prov} failed: {e}. Falling back to dynamic matrix...")
 
         # Priority 2: Automatic 3-Tier Execution Matrix
-        if not response_text:
-            if is_offline_enforced:
-                # 100% Offline Local Ollama
-                target_model = settings.LOCAL_TIER1_MODEL if score < settings.ROUTING_TIER1_MAX else settings.LOCAL_TIER2_MODEL
-                tier_used = "Tier 1 (Local Qwen 1.5B)" if score < settings.ROUTING_TIER1_MAX else "Tier 2/3 (Local Llama 3.1 8B)"
-                provider_name = "Ollama (Local)"
-                model_name = target_model
-                response_text = self._try_ollama(target_model, sanitized_prompt, system_prompt)
+        if not response_text and actual_mode == "offline":
+            target_model = settings.LOCAL_TIER1_MODEL if score < settings.ROUTING_TIER1_MAX else settings.LOCAL_TIER2_MODEL
+            tier_used = "Tier 1 (Local Qwen 1.5B)" if score < settings.ROUTING_TIER1_MAX else ("Tier 2 (Local Llama 3.1 8B)" if score <= settings.ROUTING_TIER2_MAX else "Tier 3 (Local Llama 3.1 8B)")
+            provider_name = "Ollama (Local)"
+            model_name = target_model
+            try:
+                response_text = self._try_ollama(target_model, sanitized_prompt, system_prompt, self._timeout_for_score(score))
+            except OllamaTimeoutError:
+                error_message = (
+                    f"Tier 3 complexity exceeded the local execution budget ({self._timeout_for_score(score)}s). "
+                    "Privacy/offline mode is enforced, so cloud fallback is disabled."
+                ) if score > settings.ROUTING_TIER2_MAX else "Local Ollama generation timed out while offline mode was enforced."
 
+        if not response_text and actual_mode in {"auto", "cloud"}:
+            if score < settings.ROUTING_TIER1_MAX:
+                tier_used = "Tier 1 (Fast Lightweight)"
+                model_name = "openai/gpt-oss-20b"
+            elif score <= settings.ROUTING_TIER2_MAX:
+                tier_used = "Tier 2 (Balanced Reasoning)"
+                model_name = "openai/gpt-oss-20b"
             else:
-                # Online Dynamic Routing: Groq (ultra fast) -> Gemini Flash -> Local Ollama
-                if score < settings.ROUTING_TIER1_MAX:
-                    tier_used = "Tier 1 (Fast Lightweight)"
-                    model_name = "openai/gpt-oss-20b"
-                elif score <= settings.ROUTING_TIER2_MAX:
-                    tier_used = "Tier 2 (Balanced Reasoning)"
-                    model_name = "openai/gpt-oss-20b"
-                else:
-                    tier_used = "Tier 3 (Frontier Reasoning)"
-                    model_name = "openai/gpt-oss-20b"
+                tier_used = "Tier 3 (Frontier Reasoning)"
+                model_name = "openai/gpt-oss-20b"
 
-                # Step A: Try Groq Cloud
-                if groq_provider.is_configured():
-                    try:
-                        provider_name = "Groq Cloud"
-                        response_text = invoke(provider_name, model_name, tier_used, "complexity score matched automatic tier", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
-                    except Exception as e:
-                        logger.warning(f"Groq failed: {e}")
+            if groq_provider.is_configured():
+                try:
+                    provider_name = "Groq Cloud"
+                    response_text = invoke(provider_name, model_name, tier_used, "cloud execution mode" if actual_mode == "cloud" else "complexity score matched automatic tier", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
+                except Exception as e:
+                    logger.warning(f"Groq failed: {e}")
 
-                # Step B: Fallback to Gemini Flash
-                if not response_text and gemini_provider.is_configured():
-                    try:
-                        provider_name = "Google Gemini"
-                        model_name = "gemini-flash-latest"
-                        response_text = invoke(provider_name, model_name, tier_used, "Groq fallback", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
-                    except Exception as e:
-                        logger.warning(f"Gemini fallback failed: {e}")
+            if not response_text and actual_mode == "cloud" and gemini_provider.is_configured():
+                try:
+                    provider_name = "Google Gemini"
+                    model_name = "gemini-flash-latest"
+                    response_text = invoke(provider_name, model_name, tier_used, "Groq cloud fallback", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
+                except Exception as e:
+                    logger.warning(f"Gemini cloud fallback failed: {e}")
 
-                # Step C: Fallback to Local Ollama
-                if not response_text:
-                    provider_name = "Ollama (Local Fallback)"
-                    local_model = settings.LOCAL_TIER1_MODEL if score < settings.ROUTING_TIER1_MAX else settings.LOCAL_TIER2_MODEL
-                    model_name = local_model
-                    response_text = invoke(provider_name, model_name, tier_used, "cloud provider fallback", lambda: self._try_ollama(local_model, sanitized_prompt, system_prompt))
+            if not response_text and actual_mode == "auto" and gemini_provider.is_configured():
+                try:
+                    provider_name = "Google Gemini"
+                    model_name = "gemini-flash-latest"
+                    response_text = invoke(provider_name, model_name, tier_used, "Groq fallback", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
+                except Exception as e:
+                    logger.warning(f"Gemini fallback failed: {e}")
+
+            if not response_text and actual_mode == "auto":
+                provider_name = "Ollama (Local Fallback)"
+                local_model = settings.LOCAL_TIER1_MODEL if score < settings.ROUTING_TIER1_MAX else settings.LOCAL_TIER2_MODEL
+                model_name = local_model
+                try:
+                    response_text = self._try_ollama(local_model, sanitized_prompt, system_prompt, self._timeout_for_score(score))
+                except OllamaTimeoutError:
+                    if groq_provider.is_configured():
+                        try:
+                            provider_name = "Groq Cloud"
+                            model_name = "openai/gpt-oss-20b"
+                            response_text = invoke(provider_name, model_name, tier_used, "local Ollama timeout fallback", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
+                        except Exception as e:
+                            logger.warning(f"Groq timeout fallback failed: {e}")
+                    if not response_text:
+                        error_message = "Cloud providers were unavailable and local Ollama exceeded its execution budget."
+
+        # Preserve the prior automatic path's behavior for callers that do not
+        # pass an explicit mode, while making the mode selection observable.
+        if not response_text and not error_message:
+            error_message = "No provider returned a response."
 
         # 5. Populate Cache & Telemetry
         if response_text:
@@ -215,7 +255,7 @@ class CostAutopilotRouter:
 
         return {
             "response": response_text or "",
-            "error": "No provider returned a response." if not response_text else None,
+            "error": error_message if not response_text else None,
             "complexity_score": score,
             "tier_used": tier_used,
             "model_name": model_name,
@@ -224,8 +264,20 @@ class CostAutopilotRouter:
             "is_cached": False,
             "was_redacted": was_redacted,
             "privacy_mode": is_offline_enforced,
+            "execution_mode": actual_mode,
+            "cache_key_used": cache_key,
+            "raw_output_preview": response_text[:200],
+            **({"classifier_debug": classifier_explanation} if classifier_debug else {}),
             "routing_audit": audit
         }
+
+    @staticmethod
+    def _timeout_for_score(score: float) -> int:
+        if score < settings.ROUTING_TIER1_MAX:
+            return settings.LOCAL_TIER1_TIMEOUT_SECONDS
+        if score <= settings.ROUTING_TIER2_MAX:
+            return settings.LOCAL_TIER2_TIMEOUT_SECONDS
+        return settings.LOCAL_TIER3_TIMEOUT_SECONDS
 
     def _build_audit(
         self, prompt: str, agent_name: str, score: float, tier: str, provider: str,
@@ -296,9 +348,11 @@ class CostAutopilotRouter:
             return "Advanced-domain signals increased the complexity score and favored deeper reasoning."
         return f"Complexity score {score:.2f} matched the configured cost-aware execution tier."
 
-    def _try_ollama(self, model: str, prompt: str, system: Optional[str]) -> str:
+    def _try_ollama(self, model: str, prompt: str, system: Optional[str], timeout: int) -> str:
         try:
-            return ollama_provider.generate(model=model, prompt=prompt, system_prompt=system)
+            return ollama_provider.generate(model=model, prompt=prompt, system_prompt=system, timeout=timeout)
+        except OllamaTimeoutError:
+            raise
         except Exception as e:
             logger.error(f"Local Ollama execution failed: {e}")
             return ""

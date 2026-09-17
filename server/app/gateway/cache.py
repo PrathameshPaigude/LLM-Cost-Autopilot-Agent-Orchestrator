@@ -21,6 +21,9 @@ class SemanticCache:
                 del self._store[key]
         return None
 
+    def key_for(self, text: str) -> str:
+        return self._generate_key(text)
+
     def set(self, text: str, response: str):
         key = self._generate_key(text)
         self._store[key] = {
@@ -30,5 +33,23 @@ class SemanticCache:
 
     def clear(self):
         self._store.clear()
+
+    def debug_info(self, text: Optional[str] = None) -> Dict[str, Any]:
+        info = {
+            "size": len(self._store),
+            "ttl_seconds": self.ttl_seconds,
+            "key_algorithm": "SHA-256",
+            "normalization": "strip, lowercase, collapse whitespace",
+            "hit_definition": "normalized prompt hashes to a non-expired stored response",
+        }
+        if text is not None:
+            key = self._generate_key(text)
+            entry = self._store.get(key)
+            info.update({
+                "key": key,
+                "normalized_prompt": " ".join(text.strip().lower().split()),
+                "hit": bool(entry and time.time() - entry["timestamp"] < self.ttl_seconds),
+            })
+        return info
 
 cache = SemanticCache()

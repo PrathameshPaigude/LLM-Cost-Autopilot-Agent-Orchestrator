@@ -41,5 +41,39 @@ class TestGatewayComponents(unittest.TestCase):
         self.assertEqual(retrieved, "test answer")
         self.assertIsNone(cache.get("nonexistent query"))
 
+    def test_classifier_explanation_contains_signals_and_tier(self):
+        explanation = classifier.explain("Design a distributed async pipeline", agent_name="CodeAgent")
+
+        self.assertGreaterEqual(explanation["score"], 0.0)
+        self.assertLessEqual(explanation["score"], 1.0)
+        self.assertEqual(explanation["tier"], "Tier 3")
+        self.assertIn("deep_domain_keyword", explanation["signals"]["matched_signal_flags"])
+        self.assertIn("instruction_payload", explanation["signals"])
+
+    def test_cache_debug_reports_normalized_hash_rules(self):
+        cache.clear()
+        cache.set("  Repeat   Me ", "cached")
+
+        debug = cache.debug_info("repeat me")
+
+        self.assertEqual(debug["size"], 1)
+        self.assertTrue(debug["hit"])
+        self.assertEqual(debug["key_algorithm"], "SHA-256")
+        self.assertEqual(debug["normalization"], "strip, lowercase, collapse whitespace")
+
+    def test_architecture_and_algorithm_signals_raise_expected_tiers(self):
+        cases = [
+            ("Summarize the key differences between REST and GraphQL APIs.", "Tier 2", "architecture_keywords"),
+            ("Write a Python function to reverse a linked list.", "Tier 2", "algorithm_keywords"),
+            ("Explain the CAP theorem and its implications for microservice architecture.", "Tier 3", "architecture_keywords"),
+            ("Refactor this function to use async/await instead of callbacks.", "Tier 2", "algorithm_keywords"),
+            ("Architect a fault-tolerant event-driven pipeline for real-time fraud detection at scale.", "Tier 3", "architecture_keywords"),
+        ]
+
+        for prompt, expected_tier, expected_signal in cases:
+            explanation = classifier.explain(prompt)
+            self.assertEqual(explanation["tier"], expected_tier, prompt)
+            self.assertIn(expected_signal, explanation["signals"]["matched_signal_flags"], prompt)
+
 if __name__ == "__main__":
     unittest.main()

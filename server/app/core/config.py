@@ -35,6 +35,9 @@ class Settings(BaseConfig):
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     LOCAL_TIER1_MODEL: str = os.getenv("LOCAL_TIER1_MODEL", "qwen2.5:1.5b")
     LOCAL_TIER2_MODEL: str = os.getenv("LOCAL_TIER2_MODEL", "llama3.1:8b-instruct-q4_K_M")
+    LOCAL_TIER1_TIMEOUT_SECONDS: int = int(os.getenv("LOCAL_TIER1_TIMEOUT_SECONDS", "60"))
+    LOCAL_TIER2_TIMEOUT_SECONDS: int = int(os.getenv("LOCAL_TIER2_TIMEOUT_SECONDS", "180"))
+    LOCAL_TIER3_TIMEOUT_SECONDS: int = int(os.getenv("LOCAL_TIER3_TIMEOUT_SECONDS", "300"))
 
     # Dynamic API Key Properties
     @property

@@ -5,6 +5,9 @@ from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 
+class OllamaTimeoutError(TimeoutError):
+    """Raised when local generation exceeds its caller-provided time budget."""
+
 class OllamaProvider:
     def __init__(self, base_url: Optional[str] = None):
         self.base_url = (base_url or settings.OLLAMA_BASE_URL).rstrip("/")
@@ -50,6 +53,9 @@ class OllamaProvider:
             else:
                 logger.error(f"Ollama returned error {response.status_code}: {response.text}")
                 raise RuntimeError(f"Ollama error: {response.text}")
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Ollama generation timed out after {timeout}s.")
+            raise OllamaTimeoutError(f"Ollama generation timed out after {timeout}s.") from e
         except requests.exceptions.ConnectionError:
             logger.error("Could not connect to Ollama. Ensure Ollama is running on localhost:11434.")
             raise RuntimeError("Ollama connection failed. Is Ollama running?")

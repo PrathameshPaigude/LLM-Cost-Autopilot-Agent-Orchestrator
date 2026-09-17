@@ -13,6 +13,7 @@ from .core.config import settings
 from .core.telemetry import telemetry
 from .core.ledger import ledger
 from .gateway.router import router
+from .gateway.cache import cache
 from .orchestration.workflow import engine
 from .orchestration.jobs import jobs
 from .orchestration.hitl import hitl_manager
@@ -45,6 +46,11 @@ class DirectRouteRequest(BaseModel):
     force_offline: Optional[bool] = None
     provider_override: Optional[str] = None
     model_override: Optional[str] = None
+    execution_mode: Optional[str] = None
+    mode: Optional[str] = None
+    force_cloud: Optional[bool] = None
+    classifier_debug: bool = False
+    debug: bool = False
 
 class WorkflowRequest(BaseModel):
     model_config = {"protected_namespaces": ()}
@@ -188,8 +194,22 @@ def direct_gateway_route(req: DirectRouteRequest, x_max_cost: Optional[float] = 
         agent_name=req.agent_name or "General",
         force_offline=req.force_offline,
         provider_override=req.provider_override,
-        model_override=req.model_override
+        model_override=req.model_override,
+        execution_mode=req.execution_mode or req.mode,
+        force_cloud=bool(req.force_cloud),
+        classifier_debug=req.classifier_debug or req.debug,
     )
+
+@app.get("/api/v1/debug/cache")
+def debug_cache(prompt: Optional[str] = None):
+    """Inspect cache key rules and optionally test whether a prompt is cached."""
+    return cache.debug_info(prompt)
+
+@app.delete("/api/v1/debug/cache")
+def clear_debug_cache():
+    """Clear the in-memory cache before an isolated benchmark mode run."""
+    cache.clear()
+    return cache.debug_info()
 
 @app.post("/api/v1/workflow/run")
 def run_orchestration_workflow(req: WorkflowRequest):
