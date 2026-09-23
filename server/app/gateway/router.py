@@ -1,6 +1,8 @@
 import time
 import logging
 import hashlib
+import json
+from pathlib import Path
 from typing import Dict, Any, Optional
 
 from ..core.config import settings
@@ -18,14 +20,42 @@ from ..core.ledger import EventType, append_entry
 
 logger = logging.getLogger(__name__)
 
+_FALLBACK_MODEL_COSTS = {
+    "Claude-class baseline": {"input": 15.0, "output": 75.0, "confidence": 0.94},
+    "GPT-4o-class baseline": {"input": 5.0, "output": 15.0, "confidence": 0.90},
+    "Gemini Flash": {"input": 0.075, "output": 0.30, "confidence": 0.82},
+    "Groq fast tier": {"input": 0.0, "output": 0.0, "confidence": 0.78},
+    "Ollama local": {"input": 0.0, "output": 0.0, "confidence": 0.70},
+}
+_MODEL_RATES_PATH = Path(__file__).resolve().parents[3] / "model_rates.json"
+
+
+def _load_model_rates() -> tuple[Dict[str, Dict[str, float]], str]:
+    try:
+        with _MODEL_RATES_PATH.open(encoding="utf-8") as rates_file:
+            config = json.load(rates_file)
+        rates = config["rates"]
+        if not isinstance(rates, dict) or set(_FALLBACK_MODEL_COSTS) - set(rates):
+            raise ValueError("missing one or more required model rates")
+        for label in _FALLBACK_MODEL_COSTS:
+            entry = rates[label]
+            if not all(isinstance(entry[field], (int, float)) for field in ("input", "output", "confidence")):
+                raise ValueError(f"invalid numeric values for {label}")
+        last_verified = config["last_verified"]
+        if not isinstance(last_verified, str) or not last_verified:
+            raise ValueError("missing last_verified date")
+        return rates, last_verified
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+        logger.warning(
+            "Could not load model rates from %s (%s); using built-in fallback rates.",
+            _MODEL_RATES_PATH,
+            error,
+        )
+        return _FALLBACK_MODEL_COSTS, "unknown"
+
+
 class CostAutopilotRouter:
-    MODEL_COSTS = {
-        "Claude-class baseline": {"input": 15.0, "output": 75.0, "confidence": 0.94},
-        "GPT-4o-class baseline": {"input": 5.0, "output": 15.0, "confidence": 0.90},
-        "Gemini Flash": {"input": 0.075, "output": 0.30, "confidence": 0.82},
-        "Groq fast tier": {"input": 0.0, "output": 0.0, "confidence": 0.78},
-        "Ollama local": {"input": 0.0, "output": 0.0, "confidence": 0.70},
-    }
+    MODEL_COSTS, RATES_LAST_VERIFIED = _load_model_rates()
 
     def route_and_execute(
         self, 
@@ -314,7 +344,7 @@ class CostAutopilotRouter:
             "alternatives": alternatives,
             "estimated_gpt4_class_cost_usd": round(estimated_baseline, 6),
             "estimated_savings_vs_gpt4_class_usd": round(max(0.0, estimated_baseline - selected_cost), 6),
-            "cost_basis": "Estimated using token counts and illustrative provider rates; not a billing record.",
+            "cost_basis": f"Estimated using token counts and provider rates verified as of {self.RATES_LAST_VERIFIED}; not a billing record.",
             "privacy_mode": offline,
             "was_redacted": redacted,
         }
