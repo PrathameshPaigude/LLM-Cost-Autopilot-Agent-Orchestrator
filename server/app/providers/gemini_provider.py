@@ -1,7 +1,7 @@
 import os
 import logging
 import requests
-from typing import Optional, Any
+from typing import Dict, Optional, Any
 from ..core.config import settings
 
 
@@ -23,7 +23,7 @@ class GeminiProvider:
         key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "") or self.api_key
         return bool(key and key.strip())
 
-    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: Any = (3.0, 8.0)) -> str:
+    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: Any = (3.0, 8.0)) -> Dict[str, Any]:
         api_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "") or self.api_key
         if not api_key:
             raise RuntimeError("Gemini API key is missing.")
@@ -63,12 +63,21 @@ class GeminiProvider:
             response = requests.post(url, headers=headers, json=payload, timeout=timeout)
             if response.status_code == 200:
                 data = response.json()
+                usage = data.get("usageMetadata") or {}
                 candidates = data.get("candidates", [])
                 if candidates and "content" in candidates[0]:
                     parts = candidates[0]["content"].get("parts", [])
                     if parts:
-                        return parts[0].get("text", "").strip()
-                return "Gemini returned empty response content."
+                        return {
+                            "text": parts[0].get("text", "").strip(),
+                            "input_tokens": usage.get("promptTokenCount"),
+                            "output_tokens": usage.get("candidatesTokenCount"),
+                        }
+                return {
+                    "text": "Gemini returned empty response content.",
+                    "input_tokens": usage.get("promptTokenCount"),
+                    "output_tokens": usage.get("candidatesTokenCount"),
+                }
             else:
                 raise RuntimeError(f"Gemini REST API Error ({response.status_code}): {response.text}")
         except Exception as e:

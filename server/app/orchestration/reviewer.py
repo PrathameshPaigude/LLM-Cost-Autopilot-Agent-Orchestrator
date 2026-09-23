@@ -5,6 +5,8 @@ from .state import WorkflowState
 from ..gateway.router import router
 from ..core.config import settings
 
+HITL_CONFIDENCE_THRESHOLD = settings.CONFIDENCE_THRESHOLD
+
 class ReviewerAgent:
     def __init__(self):
         self.system_prompt = (
@@ -53,6 +55,14 @@ class ReviewerAgent:
         )
 
         raw_response = res.get("response", "").strip()
+        state.review_result = {
+            "response": res.get("response", ""),
+            "input_tokens": res.get("input_tokens"),
+            "output_tokens": res.get("output_tokens"),
+            "token_source": res.get("token_source", "estimated"),
+            "actual_cost_usd": res.get("actual_cost_usd"),
+            "routing_audit": res.get("routing_audit", {}),
+        }
 
         # Clean any accidental JSON wrapping from over-obedient models
         clean_output = self._extract_clean_text(raw_response)
@@ -61,10 +71,10 @@ class ReviewerAgent:
         from ..core.ledger import EventType, append_entry
         append_entry(
             state.workflow_id, EventType.REVIEW_COMPLETED,
-            {"confidence_score": state.confidence_score, "status": "pending_hitl" if state.confidence_score < settings.CONFIDENCE_THRESHOLD else "completed"},
+            {"confidence_score": state.confidence_score, "status": "pending_hitl" if state.confidence_score < HITL_CONFIDENCE_THRESHOLD else "completed"},
         )
         state.final_output = clean_output
-        state.status = "completed" if state.confidence_score >= settings.CONFIDENCE_THRESHOLD else "pending_hitl"
+        state.status = "completed" if state.confidence_score >= HITL_CONFIDENCE_THRESHOLD else "pending_hitl"
 
         return state
 

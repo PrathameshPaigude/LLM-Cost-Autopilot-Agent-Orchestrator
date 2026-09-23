@@ -42,7 +42,8 @@ def test_all_apis():
 
         try:
             response = provider.generate(model=model, prompt=test_prompt, timeout=10)
-            preview = (response or "").strip().replace("\n", " ")[:60]
+            response_text = response.get("text", "") if isinstance(response, dict) else response
+            preview = (response_text or "").strip().replace("\n", " ")[:60]
             print("  [OK] Status: ONLINE & WORKING")
             print(f"  + Response Preview: '{preview}...'")
         except Exception as e:

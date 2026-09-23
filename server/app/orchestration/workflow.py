@@ -43,7 +43,7 @@ class OrchestrationEngine:
                 event_callback({"type": event_type, **payload})
 
         emit("workflow_stage", stage="planning", message="Supervisor is decomposing the goal")
-        # Step 1: Supervisor decomposes prompt into DAG of subtasks
+        # Step 1: Supervisor decomposes prompt into an ordered (sequential) set of subtasks
         state = supervisor.plan_workflow(
             user_prompt=user_prompt, 
             workflow_id=workflow_id,
@@ -126,13 +126,14 @@ class OrchestrationEngine:
             model_override=model_override,
             workflow_id=state.workflow_id,
         )
-        reviewed_cost = sum(
-            task.routing_audit.get("selected", {}).get("estimated_cost_usd", 0.0)
-            for task in state.subtasks
-        )
+        specialist_cost = sum(task.routing_audit.get("actual_cost_usd", 0.0) or 0.0 for task in state.subtasks)
+        reviewer_cost = reviewed_state.review_result.get("actual_cost_usd")
+        if reviewer_cost is None:
+            reviewer_cost = reviewed_state.review_result.get("routing_audit", {}).get("actual_cost_usd", 0.0)
+        reviewed_cost = specialist_cost + (reviewer_cost or 0.0)
         telemetry.record_quality_observation(reviewed_state.confidence_score, reviewed_cost)
 
-        # Step 4: Handle HITL Escalation if confidence < 0.80
+        # Step 4: Handle HITL Escalation based on HITL_CONFIDENCE_THRESHOLD
         if reviewed_state.status == "pending_hitl":
             hitl_manager.register_for_review(reviewed_state)
             append_entry(

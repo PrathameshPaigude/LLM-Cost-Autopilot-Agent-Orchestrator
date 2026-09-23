@@ -106,7 +106,7 @@ class CostAutopilotRouter:
                     "redacted_prompt_hash": prompt_hash,
                 })
             try:
-                response = fn()
+                response = consume_provider_result(fn())
                 status = "success" if response else "empty_response"
             except Exception:
                 if workflow_id:
@@ -130,9 +130,15 @@ class CostAutopilotRouter:
             if cached_result:
                 audit = self._build_audit(
                     sanitized_prompt, agent_name, 0.0, "Tier 0 (Exact-Match Cache)", "Cache", "cache", 0, 0,
-                    is_offline_enforced, was_redacted, is_cached=True
+                    is_offline_enforced, was_redacted, is_cached=True, token_source="not_applicable"
                 )
-                telemetry.record_request("Tier 0 (Exact-Match Cache)", sanitized_prompt, cached_result, is_cache=True)
+                telemetry.record_request(
+                    "Tier 0 (Exact-Match Cache)", sanitized_prompt, cached_result,
+                    is_cache=True,
+                    actual_cost_usd=audit["selected"].get("actual_cost_usd"),
+                    input_tokens=0,
+                    output_tokens=0,
+                )
                 telemetry.record_route_observation(
                     tier=audit["complexity"]["tier"],
                     provider="Cache",
@@ -153,6 +159,8 @@ class CostAutopilotRouter:
                     "privacy_mode": is_offline_enforced,
                     "execution_mode": actual_mode,
                     "cache_key_used": cache_key,
+                    "token_source": "not_applicable",
+                    "actual_cost_usd": audit["selected"].get("actual_cost_usd"),
                     "raw_output_preview": cached_result[:200],
                     **({"classifier_debug": classifier.explain(sanitized_prompt, agent_name)} if classifier_debug else {}),
                     "routing_audit": audit
@@ -168,6 +176,16 @@ class CostAutopilotRouter:
         model_name = ""
         provider_name = ""
         response_text = ""
+        provider_input_tokens: Optional[int] = None
+        provider_output_tokens: Optional[int] = None
+
+        def consume_provider_result(result: Any) -> str:
+            nonlocal provider_input_tokens, provider_output_tokens
+            if isinstance(result, dict):
+                provider_input_tokens = result.get("input_tokens")
+                provider_output_tokens = result.get("output_tokens")
+                return result.get("text") or ""
+            return result or ""
 
         # Priority 1: Handle Manual Provider Override if requested
         if provider_override:
@@ -209,7 +227,7 @@ class CostAutopilotRouter:
             provider_name = "Ollama (Local)"
             model_name = target_model
             try:
-                response_text = self._try_ollama(target_model, sanitized_prompt, system_prompt, self._timeout_for_score(score))
+                response_text = consume_provider_result(self._try_ollama(target_model, sanitized_prompt, system_prompt, self._timeout_for_score(score)))
             except OllamaTimeoutError:
                 error_message = (
                     f"Tier 3 complexity exceeded the local execution budget ({self._timeout_for_score(score)}s). "
@@ -259,7 +277,7 @@ class CostAutopilotRouter:
                 model_name = local_model
                 tier_used = "Fallback Tier 1 (Local Qwen 1.5B)" if score < settings.ROUTING_TIER1_MAX else "Fallback Tier 2 (Local Llama 3.1 8B)"
                 try:
-                    response_text = self._try_ollama(local_model, sanitized_prompt, system_prompt, self._timeout_for_score(score))
+                    response_text = consume_provider_result(self._try_ollama(local_model, sanitized_prompt, system_prompt, self._timeout_for_score(score)))
                 except OllamaTimeoutError:
                     if groq_provider.is_configured():
                         try:
@@ -278,18 +296,30 @@ class CostAutopilotRouter:
         if not response_text and not error_message:
             error_message = "No provider returned a response."
 
-        # 5. Populate Cache & Telemetry
+        # 5. Populate Cache
         if response_text:
             cache.set(cache_input, response_text)
-            telemetry.record_request(tier_used, sanitized_prompt, response_text, is_cache=False)
 
         input_text = sanitized_prompt if not system_prompt else f"{system_prompt}\n{sanitized_prompt}"
-        input_tokens = max(1, len(input_text.split()) * 4 // 3)
-        output_tokens = max(1, len(response_text.split()) * 4 // 3)
+        if provider_input_tokens is not None and provider_output_tokens is not None:
+            input_tokens = provider_input_tokens
+            output_tokens = provider_output_tokens
+            token_source = "provider_reported"
+        else:
+            input_tokens = max(1, len(input_text.split()) * 4 // 3)
+            output_tokens = max(1, len(response_text.split()) * 4 // 3)
+            token_source = "estimated"
         audit = self._build_audit(
             sanitized_prompt, agent_name, score, tier_used, provider_name, model_name,
             input_tokens, output_tokens, is_offline_enforced, was_redacted,
-            is_cached=False, manual_override=bool(provider_override or model_override)
+            is_cached=False, manual_override=bool(provider_override or model_override), token_source=token_source
+        )
+        telemetry.record_request(
+            tier_used, sanitized_prompt, response_text,
+            is_cache=False,
+            actual_cost_usd=audit["selected"].get("actual_cost_usd"),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
         telemetry.record_route_observation(
             tier=tier_used,
@@ -307,6 +337,8 @@ class CostAutopilotRouter:
             "tier_used": tier_used,
             "model_name": model_name,
             "provider": provider_name,
+            "token_source": token_source,
+            "actual_cost_usd": audit["selected"].get("actual_cost_usd"),
             "latency_seconds": round(time.time() - start_time, 3),
             "is_cached": False,
             "was_redacted": was_redacted,
@@ -329,7 +361,8 @@ class CostAutopilotRouter:
     def _build_audit(
         self, prompt: str, agent_name: str, score: float, tier: str, provider: str,
         model: str, input_tokens: int, output_tokens: int, offline: bool,
-        redacted: bool, is_cached: bool, manual_override: bool = False
+        redacted: bool, is_cached: bool, manual_override: bool = False,
+        token_source: str = "estimated"
     ) -> Dict[str, Any]:
         features = classifier.extract_features(prompt, agent_name=agent_name)
         estimated_baseline = self._estimate_cost("gpt-4o-mini", input_tokens, output_tokens)
@@ -356,10 +389,15 @@ class CostAutopilotRouter:
                 "provider": provider,
                 "model": model,
                 "estimated_cost_usd": round(selected_cost, 6) if selected_cost is not None else None,
+                "actual_cost_usd": round(selected_cost, 6) if selected_cost is not None else None,
                 "estimated_confidence": selected_rates["confidence"] if selected_rates else None,
                 "cost_unavailable": selected_cost is None,
             },
             "alternatives": alternatives,
+            "token_source": token_source,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "actual_cost_usd": round(selected_cost, 6) if selected_cost is not None else None,
             "estimated_gpt4_class_cost_usd": round(estimated_baseline, 6),
             "estimated_savings_vs_gpt4_class_usd": round(estimated_baseline - selected_cost, 6) if selected_cost is not None else None,
             "cost_unavailable": selected_cost is None,
@@ -388,13 +426,13 @@ class CostAutopilotRouter:
             return "Advanced-domain signals increased the complexity score and favored deeper reasoning."
         return f"Complexity score {score:.2f} matched the configured cost-aware execution tier."
 
-    def _try_ollama(self, model: str, prompt: str, system: Optional[str], timeout: int) -> str:
+    def _try_ollama(self, model: str, prompt: str, system: Optional[str], timeout: int) -> Dict[str, Any]:
         try:
             return ollama_provider.generate(model=model, prompt=prompt, system_prompt=system, timeout=timeout)
         except OllamaTimeoutError:
             raise
         except Exception as e:
             logger.error(f"Local Ollama execution failed: {e}")
-            return ""
+            return {"text": "", "input_tokens": None, "output_tokens": None}
 
 router = CostAutopilotRouter()

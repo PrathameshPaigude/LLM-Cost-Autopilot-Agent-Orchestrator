@@ -2,7 +2,7 @@ import os
 import time
 import logging
 import requests
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from ..core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class GroqProvider:
         key = settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY", "") or self.api_key
         return bool(key and key.strip() and not key.startswith("sk-or-"))
 
-    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: int = 15) -> str:
+    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: int = 15) -> Dict[str, Any]:
         api_key = settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY", "") or self.api_key
         if not api_key:
             raise RuntimeError("Groq API key is missing.")
@@ -53,7 +53,13 @@ class GroqProvider:
                 if response.status_code == 200:
                     data = response.json()
                     self.last_model_used = m
-                    return data["choices"][0]["message"]["content"].strip()
+                    usage = data.get("usage") or {}
+                    text = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                    return {
+                        "text": text,
+                        "input_tokens": usage.get("prompt_tokens"),
+                        "output_tokens": usage.get("completion_tokens"),
+                    }
                 elif response.status_code == 429:
                     logger.warning(f"Groq model {m} rate limited (429). Trying alternate pool model...")
                     time.sleep(1.0)

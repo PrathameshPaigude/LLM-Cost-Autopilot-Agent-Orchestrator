@@ -18,6 +18,7 @@ class WorkflowState(BaseModel):
     subtasks: List[AgentTask] = Field(default_factory=list)
     current_step: int = 0
     final_output: Optional[str] = None
+    review_result: Dict[str, Any] = Field(default_factory=dict)
     confidence_score: float = 0.0
     status: str = "initialized"  # initialized, planning, executing, review, pending_hitl, completed, rejected
     telemetry_summary: Dict[str, Any] = Field(default_factory=dict)

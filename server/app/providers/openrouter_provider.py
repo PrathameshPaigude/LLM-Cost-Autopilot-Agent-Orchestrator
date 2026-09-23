@@ -1,7 +1,7 @@
 import os
 import logging
 import requests
-from typing import Optional
+from typing import Any, Dict, Optional
 from ..core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ class OpenRouterProvider:
         key = settings.OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY", "") or self.api_key
         return bool(key and key.strip())
 
-    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: int = 45) -> str:
+    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: int = 45) -> Dict[str, Any]:
         api_key = settings.OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY", "") or self.api_key
         if not api_key:
             raise RuntimeError("OpenRouter API key is missing. Set OPENROUTER_API_KEY in .env or environment.")
@@ -43,7 +43,12 @@ class OpenRouterProvider:
             response = requests.post(url, headers=headers, json=payload, timeout=timeout)
             if response.status_code == 200:
                 data = response.json()
-                return data["choices"][0]["message"]["content"].strip()
+                usage = data.get("usage") or {}
+                return {
+                    "text": data.get("choices", [{}])[0].get("message", {}).get("content", "").strip(),
+                    "input_tokens": usage.get("prompt_tokens"),
+                    "output_tokens": usage.get("completion_tokens"),
+                }
             else:
                 raise RuntimeError(f"OpenRouter API Error ({response.status_code}): {response.text}")
         except Exception as e:

@@ -1,6 +1,6 @@
 import requests
 import logging
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from ..core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class OllamaProvider:
         except Exception:
             return []
 
-    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: int = 180) -> str:
+    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: int = 180) -> Dict[str, Any]:
         url = f"{self.base_url}/api/generate"
         payload = {
             "model": model,
@@ -49,7 +49,11 @@ class OllamaProvider:
                 result = data.get("response", "").strip()
                 if not result:
                     raise RuntimeError("Ollama returned an empty response.")
-                return result
+                return {
+                    "text": result,
+                    "input_tokens": data.get("prompt_eval_count"),
+                    "output_tokens": data.get("eval_count"),
+                }
             else:
                 logger.error(f"Ollama returned error {response.status_code}: {response.text}")
                 raise RuntimeError(f"Ollama error: {response.text}")

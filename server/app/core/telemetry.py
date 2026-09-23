@@ -15,12 +15,25 @@ class TelemetryTracker:
         self.actual_cost: float = 0.0
         self.observations = deque(maxlen=160)
 
-    def record_request(self, tier: str, input_text: str, output_text: str, is_cache: bool = False):
+    def record_request(
+        self,
+        tier: str,
+        input_text: str,
+        output_text: str,
+        is_cache: bool = False,
+        actual_cost_usd: Optional[float] = None,
+        input_tokens: Optional[int] = None,
+        output_tokens: Optional[int] = None,
+    ):
         self.total_requests += 1
         
-        # Estimate token count (1 token ≈ 4 characters or 0.75 words)
-        in_tokens = max(1, len(input_text.split()) * 4 // 3)
-        out_tokens = max(1, len(output_text.split()) * 4 // 3)
+        if input_tokens is None or output_tokens is None:
+            # Estimate token count (1 token ≈ 4 characters or 0.75 words)
+            in_tokens = max(1, len(input_text.split()) * 4 // 3)
+            out_tokens = max(1, len(output_text.split()) * 4 // 3)
+        else:
+            in_tokens = input_tokens
+            out_tokens = output_tokens
         
         self.total_input_tokens += in_tokens
         self.total_output_tokens += out_tokens
@@ -28,6 +41,8 @@ class TelemetryTracker:
         # Claude 3.5 Sonnet / Opus baseline ($15/1M in, $75/1M out)
         baseline_cost = (in_tokens * 15.0 / 1_000_000) + (out_tokens * 75.0 / 1_000_000)
         self.simulated_frontier_cost += baseline_cost
+        if actual_cost_usd is not None:
+            self.actual_cost += actual_cost_usd
 
         if is_cache:
             self.cache_hits += 1
