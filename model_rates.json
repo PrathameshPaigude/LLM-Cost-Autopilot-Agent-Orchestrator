@@ -2,10 +2,14 @@
   "last_verified": "2026-09-23",
   "source_note": "Rates checked manually against provider pricing pages. Re-verify periodically -- provider pricing changes often.",
   "rates": {
-    "Claude-class baseline": {"input": 4.0, "output": 20.0, "confidence": 0.94},
-    "GPT-4o-class baseline": {"input": 2.5, "output": 10.0, "confidence": 0.90},
-    "Gemini Flash": {"input": 0.30, "output": 2.50, "confidence": 0.82},
-    "Groq fast tier": {"input": 0.0, "output": 0.0, "confidence": 0.78},
-    "Ollama local": {"input": 0.0, "output": 0.0, "confidence": 0.70}
+    "openai/gpt-oss-20b": {"input": 0.075, "output": 0.30, "confidence": 0.78, "provider": "Groq"},
+    "qwen/qwen3-32b": {"input": 0.29, "output": 0.59, "confidence": 0.84, "provider": "Groq"},
+    "openai/gpt-oss-120b": {"input": 0.15, "output": 0.60, "confidence": 0.90, "provider": "Groq"},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60, "confidence": 0.90, "provider": "OpenAI"},
+    "gemini-flash-latest": {"input": 0.30, "output": 2.50, "confidence": 0.82, "provider": "Google Gemini"},
+    "deepseek/deepseek-r1": {"input": 0.70, "output": 2.50, "confidence": 0.88, "provider": "OpenRouter"},
+    "qwen2.5:1.5b": {"input": 0.0, "output": 0.0, "confidence": 0.70, "provider": "Ollama"},
+    "llama3.1:8b-instruct-q4_K_M": {"input": 0.0, "output": 0.0, "confidence": 0.70, "provider": "Ollama"},
+    "cache": {"input": 0.0, "output": 0.0, "confidence": 1.0, "provider": "Cache"}
   }
 }

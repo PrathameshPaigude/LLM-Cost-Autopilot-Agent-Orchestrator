@@ -39,6 +39,11 @@ class Settings(BaseConfig):
     LOCAL_TIER2_TIMEOUT_SECONDS: int = int(os.getenv("LOCAL_TIER2_TIMEOUT_SECONDS", "180"))
     LOCAL_TIER3_TIMEOUT_SECONDS: int = int(os.getenv("LOCAL_TIER3_TIMEOUT_SECONDS", "300"))
 
+    # Groq Cloud Settings
+    GROQ_TIER1_MODEL: str = os.getenv("GROQ_TIER1_MODEL", "openai/gpt-oss-20b")
+    GROQ_TIER2_MODEL: str = os.getenv("GROQ_TIER2_MODEL", "qwen/qwen3-32b")
+    GROQ_TIER3_MODEL: str = os.getenv("GROQ_TIER3_MODEL", "openai/gpt-oss-120b")
+
     # Dynamic API Key Properties
     @property
     def GEMINI_API_KEY(self) -> str:

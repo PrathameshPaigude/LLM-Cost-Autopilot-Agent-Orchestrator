@@ -47,7 +47,7 @@ An enterprise-grade, stateful Multi-Agent AI Orchestration Engine equipped with 
                    ┌──────────────────────────────────────────────────┐
                    │    Intelligent Routing Gateway (Cost Autopilot)   │
                    ├──────────────────────────────────────────────────┤
-                   │  [0] Semantic Cache (SHA-256 In-Memory / ~0ms)   │
+                   │  [0] Exact-Match Cache (SHA-256 In-Memory / ~0ms) │
                    │  [1] PII & Secret Redactor (Presidio / Regex)    │
                    │  [2] ML Complexity Classifier (0.0 to 1.0)       │
                    └─────────────────────────┬────────────────────────┘
@@ -58,7 +58,7 @@ An enterprise-grade, stateful Multi-Agent AI Orchestration Engine equipped with 
       Score: 0.00 – 0.30            Score: 0.31 – 0.70            Score: 0.71 – 1.00
       • Groq: gpt-oss-20b (500+ t/s)• Groq: gpt-oss-120b          • Gemini: gemini-pro-latest
       • Gemini: flash-lite-latest   • Gemini: flash-latest        • OpenAI: gpt-4o / o3-mini
-      • Local: Qwen 2.5 1.5B        • Local: Llama 3.1 8B         • OpenRouter: DeepSeek-R1:free
+      • Local: Qwen 2.5 1.5B        • Local: Llama 3.1 8B         • OpenRouter: DeepSeek R1
 ```
 
 ---
@@ -67,10 +67,10 @@ An enterprise-grade, stateful Multi-Agent AI Orchestration Engine equipped with 
 
 | Tier | Complexity | Providers & Models (Free & Paid) | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Tier 0** | 0.00 | **Semantic Cache** (SHA-256 In-Memory) | Instant $\approx 0\text{ ms}$ response on repeated queries ($0.00 cost) |
+| **Tier 0** | 0.00 | **Exact-Match Cache** (SHA-256 In-Memory) | Instant $\approx 0\text{ ms}$ response on repeated queries ($0.00 cost) |
 | **Tier 1** | 0.00 – 0.30 | • **Groq (Free):** `openai/gpt-oss-20b` (500+ tok/s)<br>• **Gemini (Free):** `gemini-flash-lite-latest`<br>• **OpenRouter (Free):** `mistralai/mistral-7b:free`<br>• **OpenAI:** `gpt-4o-mini`<br>• **Local Ollama:** `qwen2.5:1.5b` (~1.2 GB RAM) | Fast parsing, grammar correction, formatting, quick micro-tasks |
-| **Tier 2** | 0.31 – 0.70 | • **Groq (Free):** `openai/gpt-oss-120b`<br>• **Gemini (Free):** `gemini-flash-latest`<br>• **OpenRouter (Free):** `qwen/qwen-2.5-coder-32b:free`<br>• **OpenAI:** `gpt-4o-mini`<br>• **Local Ollama:** `llama3.1:8b` (~4.8 GB RAM) | Software development, code refactoring, system analysis, technical writing |
-| **Tier 3** | 0.71 – 1.00 | • **Gemini (Free):** `gemini-pro-latest`<br>• **OpenAI:** `gpt-4o`, `o3-mini`<br>• **Groq (Free):** `qwen/qwen3.8-27b`<br>• **OpenRouter (Free):** `deepseek/deepseek-r1:free`<br>• **Local Ollama:** `llama3.1:8b` | Multi-agent synthesis, system architecture, deep reasoning, quality review |
+| **Tier 2** | 0.31 – 0.70 | • **Groq:** `qwen/qwen3-32b`<br>• **Gemini:** `gemini-flash-latest`<br>• **OpenRouter:** `qwen/qwen-2.5-coder-32b:free`<br>• **OpenAI:** `gpt-4o-mini`<br>• **Local Ollama:** `llama3.1:8b` (~4.8 GB RAM) | Software development, code refactoring, system analysis, technical writing |
+| **Tier 3** | 0.71 – 1.00 | • **Gemini:** `gemini-pro-latest`<br>• **OpenAI:** `gpt-4o`, `o3-mini`<br>• **Groq:** `openai/gpt-oss-120b`<br>• **OpenRouter:** `deepseek/deepseek-r1`<br>• **Local Ollama:** `llama3.1:8b` | Multi-agent synthesis, system architecture, deep reasoning, quality review |
 
 ---
 

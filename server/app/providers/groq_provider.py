@@ -8,15 +8,15 @@ from ..core.config import settings
 logger = logging.getLogger(__name__)
 
 GROQ_FALLBACK_MODELS = [
-    "openai/gpt-oss-20b",
-    "qwen/qwen3.8-27b",
-    "groq/compound-mini",
-    "openai/gpt-oss-120b"
+    settings.GROQ_TIER1_MODEL,
+    settings.GROQ_TIER2_MODEL,
+    settings.GROQ_TIER3_MODEL,
 ]
 
 class GroqProvider:
     def __init__(self):
         self.api_key = settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY", "")
+        self.last_model_used = None
 
     def is_configured(self) -> bool:
         key = settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY", "") or self.api_key
@@ -52,6 +52,7 @@ class GroqProvider:
                 response = requests.post(url, headers=headers, json=payload, timeout=timeout)
                 if response.status_code == 200:
                     data = response.json()
+                    self.last_model_used = m
                     return data["choices"][0]["message"]["content"].strip()
                 elif response.status_code == 429:
                     logger.warning(f"Groq model {m} rate limited (429). Trying alternate pool model...")

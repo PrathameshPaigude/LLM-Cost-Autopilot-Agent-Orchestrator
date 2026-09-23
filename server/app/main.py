@@ -91,7 +91,7 @@ def health_check():
             "groq": {
                 "configured": groq_provider.is_configured(),
                 "tier": "Free Tier (Fast)",
-                "default_model": "llama-3.3-70b-versatile"
+                "default_model": "qwen/qwen3-32b"
             },
             "openai": {
                 "configured": openai_provider.is_configured(),
@@ -101,7 +101,7 @@ def health_check():
             "openrouter": {
                 "configured": openrouter_provider.is_configured(),
                 "tier": "100% Free Roster",
-                "default_model": "deepseek/deepseek-r1:free"
+                "default_model": "deepseek/deepseek-r1"
             },
             "ollama": {
                 "configured": True,
@@ -151,8 +151,8 @@ def list_available_models():
                 "type": "Cloud (Ultra-Fast Free Tier)",
                 "configured": groq_provider.is_configured(),
                 "models": [
-                    {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B Versatile (Free Tier)", "tier": "Tier 2/3"},
-                    {"id": "llama-3.1-8b-instant", "name": "Llama 3.1 8B Instant (500+ tok/s - Free)", "tier": "Tier 1"},
+                    {"id": "qwen/qwen3-32b", "name": "Qwen3 32B", "tier": "Tier 2"},
+                    {"id": "openai/gpt-oss-20b", "name": "GPT-OSS 20B", "tier": "Tier 1"},
                     {"id": "deepseek-r1-distill-llama-70b", "name": "DeepSeek R1 Distill 70B (Free)", "tier": "Tier 3"},
                     {"id": "gemma2-9b-it", "name": "Gemma 2 9B (Free)", "tier": "Tier 1"},
                     {"id": "mixtral-8x7b-32768", "name": "Mixtral 8x7B MoE (Free)", "tier": "Tier 2"}
@@ -164,7 +164,7 @@ def list_available_models():
                 "type": "Cloud (100% Free Tier Hub)",
                 "configured": openrouter_provider.is_configured(),
                 "models": [
-                    {"id": "deepseek/deepseek-r1:free", "name": "DeepSeek R1 (100% Free)", "tier": "Tier 3"},
+                    {"id": "deepseek/deepseek-r1", "name": "DeepSeek R1 ($0.70/$2.50 per 1M tokens)", "tier": "Tier 3"},
                     {"id": "meta-llama/llama-3.3-70b-instruct:free", "name": "Meta Llama 3.3 70B (100% Free)", "tier": "Tier 2/3"},
                     {"id": "qwen/qwen-2.5-coder-32b-instruct:free", "name": "Qwen 2.5 Coder 32B (100% Free)", "tier": "Tier 2"},
                     {"id": "mistralai/mistral-7b-instruct:free", "name": "Mistral 7B Instruct (100% Free)", "tier": "Tier 1"}

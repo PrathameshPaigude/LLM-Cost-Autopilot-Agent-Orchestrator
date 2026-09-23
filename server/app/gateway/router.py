@@ -21,26 +21,30 @@ from ..core.ledger import EventType, append_entry
 logger = logging.getLogger(__name__)
 
 _FALLBACK_MODEL_COSTS = {
-    "Claude-class baseline": {"input": 15.0, "output": 75.0, "confidence": 0.94},
-    "GPT-4o-class baseline": {"input": 5.0, "output": 15.0, "confidence": 0.90},
-    "Gemini Flash": {"input": 0.075, "output": 0.30, "confidence": 0.82},
-    "Groq fast tier": {"input": 0.0, "output": 0.0, "confidence": 0.78},
-    "Ollama local": {"input": 0.0, "output": 0.0, "confidence": 0.70},
+    "openai/gpt-oss-20b": {"input": 0.075, "output": 0.30, "confidence": 0.78, "provider": "Groq"},
+    "qwen/qwen3-32b": {"input": 0.29, "output": 0.59, "confidence": 0.84, "provider": "Groq"},
+    "openai/gpt-oss-120b": {"input": 0.15, "output": 0.60, "confidence": 0.90, "provider": "Groq"},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60, "confidence": 0.90, "provider": "OpenAI"},
+    "gemini-flash-latest": {"input": 0.30, "output": 2.50, "confidence": 0.82, "provider": "Google Gemini"},
+    "deepseek/deepseek-r1": {"input": 0.70, "output": 2.50, "confidence": 0.88, "provider": "OpenRouter"},
+    "qwen2.5:1.5b": {"input": 0.0, "output": 0.0, "confidence": 0.70, "provider": "Ollama"},
+    "llama3.1:8b-instruct-q4_K_M": {"input": 0.0, "output": 0.0, "confidence": 0.70, "provider": "Ollama"},
+    "cache": {"input": 0.0, "output": 0.0, "confidence": 1.0, "provider": "Cache"},
 }
 _MODEL_RATES_PATH = Path(__file__).resolve().parents[3] / "model_rates.json"
 
 
-def _load_model_rates() -> tuple[Dict[str, Dict[str, float]], str]:
+def _load_model_rates() -> tuple[Dict[str, Dict[str, Any]], str]:
     try:
         with _MODEL_RATES_PATH.open(encoding="utf-8") as rates_file:
             config = json.load(rates_file)
         rates = config["rates"]
         if not isinstance(rates, dict) or set(_FALLBACK_MODEL_COSTS) - set(rates):
             raise ValueError("missing one or more required model rates")
-        for label in _FALLBACK_MODEL_COSTS:
-            entry = rates[label]
+        for model_name in _FALLBACK_MODEL_COSTS:
+            entry = rates[model_name]
             if not all(isinstance(entry[field], (int, float)) for field in ("input", "output", "confidence")):
-                raise ValueError(f"invalid numeric values for {label}")
+                raise ValueError(f"invalid numeric values for {model_name}")
         last_verified = config["last_verified"]
         if not isinstance(last_verified, str) or not last_verified:
             raise ValueError("missing last_verified date")
@@ -82,6 +86,11 @@ class CostAutopilotRouter:
         # 1. PII Redaction
         sanitized_prompt, was_redacted = redactor.sanitize(prompt)
         prompt_hash = hashlib.sha256(sanitized_prompt.encode("utf-8")).hexdigest()
+        cache_input = json.dumps({
+            "prompt": sanitized_prompt,
+            "agent_name": agent_name,
+            "system_prompt": system_prompt or "",
+        }, sort_keys=True)
 
         def invoke(provider: str, model: str, tier: str, reason: str, fn):
             called_entry = None
@@ -114,16 +123,16 @@ class CostAutopilotRouter:
                 }, parent_entry_id=called_entry)
             return response
 
-        # 2. Semantic Cache Check (Tier 0)
+        # 2. Exact-Match Cache Check (Tier 0)
         if not provider_override and not model_override:
-            cache_key = cache.key_for(sanitized_prompt)
-            cached_result = cache.get(sanitized_prompt)
+            cache_key = cache.key_for(cache_input)
+            cached_result = cache.get(cache_input)
             if cached_result:
                 audit = self._build_audit(
-                    sanitized_prompt, agent_name, 0.0, "Tier 0 (Semantic Cache)", "Cache", "cache", 0, 0,
+                    sanitized_prompt, agent_name, 0.0, "Tier 0 (Exact-Match Cache)", "Cache", "cache", 0, 0,
                     is_offline_enforced, was_redacted, is_cached=True
                 )
-                telemetry.record_request("Tier 0 (Semantic Cache)", sanitized_prompt, cached_result, is_cache=True)
+                telemetry.record_request("Tier 0 (Exact-Match Cache)", sanitized_prompt, cached_result, is_cache=True)
                 telemetry.record_route_observation(
                     tier=audit["complexity"]["tier"],
                     provider="Cache",
@@ -135,7 +144,7 @@ class CostAutopilotRouter:
                 return {
                     "response": cached_result,
                     "complexity_score": 0.0,
-                    "tier_used": "Tier 0 (Semantic Cache)",
+                    "tier_used": "Tier 0 (Exact-Match Cache)",
                     "model_name": "cache",
                     "provider": "Cache",
                     "latency_seconds": round(time.time() - start_time, 4),
@@ -152,7 +161,7 @@ class CostAutopilotRouter:
         # 3. Complexity Classification (0.0 to 1.0)
         score = classifier.predict_score(sanitized_prompt, agent_name=agent_name)
         classifier_explanation = classifier.explain(sanitized_prompt, agent_name) if classifier_debug else None
-        cache_key = cache.key_for(sanitized_prompt)
+        cache_key = cache.key_for(cache_input)
 
         # 4. Model Selection & Execution
         tier_used = ""
@@ -165,10 +174,11 @@ class CostAutopilotRouter:
             prov = provider_override.lower()
             try:
                 if prov == "groq" and groq_provider.is_configured():
-                    model_name = model_override or "openai/gpt-oss-20b"
+                    model_name = model_override or settings.GROQ_TIER2_MODEL
                     provider_name = "Groq Cloud"
                     tier_used = "Manual (Groq Cloud)"
                     response_text = invoke("Groq Cloud", model_name, tier_used, "manual provider override", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
+                    model_name = getattr(groq_provider, "last_model_used", None) or model_name
                 elif prov == "gemini" and gemini_provider.is_configured():
                     model_name = model_override or "gemini-flash-latest"
                     provider_name = "Google Gemini"
@@ -180,7 +190,7 @@ class CostAutopilotRouter:
                     tier_used = "Manual (OpenAI)"
                     response_text = invoke("OpenAI", model_name, tier_used, "manual provider override", lambda: openai_provider.generate(model_name, sanitized_prompt, system_prompt))
                 elif prov == "openrouter" and openrouter_provider.is_configured():
-                    model_name = model_override or "deepseek/deepseek-r1:free"
+                    model_name = model_override or "deepseek/deepseek-r1"
                     provider_name = "OpenRouter"
                     tier_used = "Manual (OpenRouter)"
                     response_text = invoke("OpenRouter", model_name, tier_used, "manual provider override", lambda: openrouter_provider.generate(model_name, sanitized_prompt, system_prompt))
@@ -209,18 +219,19 @@ class CostAutopilotRouter:
         if not response_text and actual_mode in {"auto", "cloud"}:
             if score < settings.ROUTING_TIER1_MAX:
                 tier_used = "Tier 1 (Fast Lightweight)"
-                model_name = "openai/gpt-oss-20b"
+                model_name = settings.GROQ_TIER1_MODEL
             elif score <= settings.ROUTING_TIER2_MAX:
                 tier_used = "Tier 2 (Balanced Reasoning)"
-                model_name = "openai/gpt-oss-20b"
+                model_name = settings.GROQ_TIER2_MODEL
             else:
                 tier_used = "Tier 3 (Frontier Reasoning)"
-                model_name = "openai/gpt-oss-20b"
+                model_name = settings.GROQ_TIER3_MODEL
 
             if groq_provider.is_configured():
                 try:
                     provider_name = "Groq Cloud"
                     response_text = invoke(provider_name, model_name, tier_used, "cloud execution mode" if actual_mode == "cloud" else "complexity score matched automatic tier", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
+                    model_name = getattr(groq_provider, "last_model_used", None) or model_name
                 except Exception as e:
                     logger.warning(f"Groq failed: {e}")
 
@@ -228,6 +239,7 @@ class CostAutopilotRouter:
                 try:
                     provider_name = "Google Gemini"
                     model_name = "gemini-flash-latest"
+                    tier_used = "Fallback Tier 2 (Gemini Flash)"
                     response_text = invoke(provider_name, model_name, tier_used, "Groq cloud fallback", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
                 except Exception as e:
                     logger.warning(f"Gemini cloud fallback failed: {e}")
@@ -236,6 +248,7 @@ class CostAutopilotRouter:
                 try:
                     provider_name = "Google Gemini"
                     model_name = "gemini-flash-latest"
+                    tier_used = "Fallback Tier 2 (Gemini Flash)"
                     response_text = invoke(provider_name, model_name, tier_used, "Groq fallback", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
                 except Exception as e:
                     logger.warning(f"Gemini fallback failed: {e}")
@@ -244,14 +257,17 @@ class CostAutopilotRouter:
                 provider_name = "Ollama (Local Fallback)"
                 local_model = settings.LOCAL_TIER1_MODEL if score < settings.ROUTING_TIER1_MAX else settings.LOCAL_TIER2_MODEL
                 model_name = local_model
+                tier_used = "Fallback Tier 1 (Local Qwen 1.5B)" if score < settings.ROUTING_TIER1_MAX else "Fallback Tier 2 (Local Llama 3.1 8B)"
                 try:
                     response_text = self._try_ollama(local_model, sanitized_prompt, system_prompt, self._timeout_for_score(score))
                 except OllamaTimeoutError:
                     if groq_provider.is_configured():
                         try:
                             provider_name = "Groq Cloud"
-                            model_name = "openai/gpt-oss-20b"
+                            model_name = settings.GROQ_TIER2_MODEL
+                            tier_used = "Fallback Tier 2 (Balanced Reasoning)"
                             response_text = invoke(provider_name, model_name, tier_used, "local Ollama timeout fallback", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
+                            model_name = getattr(groq_provider, "last_model_used", None) or model_name
                         except Exception as e:
                             logger.warning(f"Groq timeout fallback failed: {e}")
                     if not response_text:
@@ -264,10 +280,11 @@ class CostAutopilotRouter:
 
         # 5. Populate Cache & Telemetry
         if response_text:
-            cache.set(sanitized_prompt, response_text)
+            cache.set(cache_input, response_text)
             telemetry.record_request(tier_used, sanitized_prompt, response_text, is_cache=False)
 
-        input_tokens = max(1, len(sanitized_prompt.split()) * 4 // 3)
+        input_text = sanitized_prompt if not system_prompt else f"{system_prompt}\n{sanitized_prompt}"
+        input_tokens = max(1, len(input_text.split()) * 4 // 3)
         output_tokens = max(1, len(response_text.split()) * 4 // 3)
         audit = self._build_audit(
             sanitized_prompt, agent_name, score, tier_used, provider_name, model_name,
@@ -315,18 +332,18 @@ class CostAutopilotRouter:
         redacted: bool, is_cached: bool, manual_override: bool = False
     ) -> Dict[str, Any]:
         features = classifier.extract_features(prompt, agent_name=agent_name)
-        estimated_baseline = self._estimate_cost("GPT-4o-class baseline", input_tokens, output_tokens)
-        selected_label = self._cost_label(provider, offline, is_cached)
-        selected_cost = self._estimate_cost(selected_label, input_tokens, output_tokens)
+        estimated_baseline = self._estimate_cost("gpt-4o-mini", input_tokens, output_tokens)
+        selected_cost = self._estimate_cost(model, input_tokens, output_tokens)
         alternatives = []
-        for label, rates in self.MODEL_COSTS.items():
-            cost = self._estimate_cost(label, input_tokens, output_tokens)
+        for model_name, rates in self.MODEL_COSTS.items():
+            cost = self._estimate_cost(model_name, input_tokens, output_tokens)
             alternatives.append({
-                "option": label,
-                "estimated_cost_usd": round(cost, 6),
+                "option": model_name,
+                "estimated_cost_usd": round(cost, 6) if cost is not None else None,
                 "estimated_confidence": rates["confidence"],
-                "relative_savings_vs_claude_usd": round(max(0.0, estimated_baseline - cost), 6),
+                "relative_savings_vs_baseline_usd": round(estimated_baseline - cost, 6) if cost is not None else None,
             })
+        selected_rates = self.MODEL_COSTS.get(model)
         return {
             "decision": "cache_hit" if is_cached else ("manual_override" if manual_override else "automatic"),
             "reason": self._reason(score, features, offline, is_cached, manual_override),
@@ -338,30 +355,23 @@ class CostAutopilotRouter:
             "selected": {
                 "provider": provider,
                 "model": model,
-                "estimated_cost_usd": round(selected_cost, 6),
-                "estimated_confidence": self.MODEL_COSTS[selected_label]["confidence"],
+                "estimated_cost_usd": round(selected_cost, 6) if selected_cost is not None else None,
+                "estimated_confidence": selected_rates["confidence"] if selected_rates else None,
+                "cost_unavailable": selected_cost is None,
             },
             "alternatives": alternatives,
             "estimated_gpt4_class_cost_usd": round(estimated_baseline, 6),
-            "estimated_savings_vs_gpt4_class_usd": round(max(0.0, estimated_baseline - selected_cost), 6),
+            "estimated_savings_vs_gpt4_class_usd": round(estimated_baseline - selected_cost, 6) if selected_cost is not None else None,
+            "cost_unavailable": selected_cost is None,
             "cost_basis": f"Estimated using token counts and provider rates verified as of {self.RATES_LAST_VERIFIED}; not a billing record.",
             "privacy_mode": offline,
             "was_redacted": redacted,
         }
 
-    def _cost_label(self, provider: str, offline: bool, is_cached: bool) -> str:
-        if is_cached:
-            return "Ollama local"
-        if offline or "Ollama" in provider:
-            return "Ollama local"
-        if "Gemini" in provider:
-            return "Gemini Flash"
-        if "Groq" in provider or "OpenRouter" in provider:
-            return "Groq fast tier"
-        return "GPT-4o-class baseline" if "OpenAI" in provider else "Ollama local"
-
-    def _estimate_cost(self, label: str, input_tokens: int, output_tokens: int) -> float:
-        rates = self.MODEL_COSTS[label]
+    def _estimate_cost(self, model_name: str, input_tokens: int, output_tokens: int) -> Optional[float]:
+        rates = self.MODEL_COSTS.get(model_name)
+        if rates is None:
+            return None
         return (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
 
     @staticmethod
