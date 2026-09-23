@@ -106,6 +106,12 @@ class EvidenceLedger:
         return [self._entry_from_row(row) for row in rows]
 
     def verify_chain(self, workflow_id: str) -> bool:
+        """Verify the entire global hash chain and confirm workflow membership.
+
+        This is not a per-workflow-only chain: the hash chain spans all
+        workflows in sequence order, while the given workflow_id must have at
+        least one entry within it.
+        """
         self._write_queue.join()
         connection = self._connect()
         try:
@@ -188,6 +194,9 @@ class EvidenceLedger:
                     entry_hash TEXT NOT NULL UNIQUE
                 )
                 """
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ledger_workflow ON ledger_entries(workflow_id)"
             )
             connection.commit()
         finally:

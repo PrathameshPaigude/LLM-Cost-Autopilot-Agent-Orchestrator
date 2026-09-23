@@ -93,6 +93,7 @@ class CostAutopilotRouter:
         }, sort_keys=True)
 
         def invoke(provider: str, model: str, tier: str, reason: str, fn):
+            nonlocal provider_input_tokens, provider_output_tokens
             called_entry = None
             if workflow_id:
                 append_entry(workflow_id, EventType.TASK_ROUTED, {
@@ -106,6 +107,8 @@ class CostAutopilotRouter:
                     "redacted_prompt_hash": prompt_hash,
                 })
             try:
+                provider_input_tokens = None
+                provider_output_tokens = None
                 response = consume_provider_result(fn())
                 status = "success" if response else "empty_response"
             except Exception:
@@ -113,13 +116,30 @@ class CostAutopilotRouter:
                     append_entry(workflow_id, EventType.PROVIDER_RESPONSE, {
                         "provider": provider, "model": model, "tier": tier,
                         "status": "error", "redacted_prompt_hash": prompt_hash,
+                        "input_tokens": None,
+                        "output_tokens": None,
+                        "token_source": None,
+                        "estimated_cost_usd": None,
                     }, parent_entry_id=called_entry)
                 raise
             if workflow_id:
+                ledger_input_text = sanitized_prompt if not system_prompt else f"{system_prompt}\n{sanitized_prompt}"
+                if provider_input_tokens is not None and provider_output_tokens is not None:
+                    ledger_input_tokens = provider_input_tokens
+                    ledger_output_tokens = provider_output_tokens
+                    ledger_token_source = "provider_reported"
+                else:
+                    ledger_input_tokens = max(1, len(ledger_input_text.split()) * 4 // 3)
+                    ledger_output_tokens = max(1, len(response.split()) * 4 // 3)
+                    ledger_token_source = "estimated"
                 append_entry(workflow_id, EventType.PROVIDER_RESPONSE, {
                     "provider": provider, "model": model, "tier": tier, "status": status,
                     "response_hash": hashlib.sha256((response or "").encode("utf-8")).hexdigest(),
                     "response_length": len(response or ""),
+                    "input_tokens": ledger_input_tokens,
+                    "output_tokens": ledger_output_tokens,
+                    "token_source": ledger_token_source,
+                    "estimated_cost_usd": self._estimate_cost(model, ledger_input_tokens, ledger_output_tokens),
                 }, parent_entry_id=called_entry)
             return response
 
@@ -160,6 +180,8 @@ class CostAutopilotRouter:
                     "execution_mode": actual_mode,
                     "cache_key_used": cache_key,
                     "token_source": "not_applicable",
+                    "input_tokens": 0,
+                    "output_tokens": 0,
                     "actual_cost_usd": audit["selected"].get("actual_cost_usd"),
                     "raw_output_preview": cached_result[:200],
                     **({"classifier_debug": classifier.explain(sanitized_prompt, agent_name)} if classifier_debug else {}),
@@ -227,7 +249,10 @@ class CostAutopilotRouter:
             provider_name = "Ollama (Local)"
             model_name = target_model
             try:
-                response_text = consume_provider_result(self._try_ollama(target_model, sanitized_prompt, system_prompt, self._timeout_for_score(score)))
+                response_text = invoke(
+                    provider_name, model_name, tier_used, "offline execution mode",
+                    lambda: self._try_ollama(target_model, sanitized_prompt, system_prompt, self._timeout_for_score(score)),
+                )
             except OllamaTimeoutError:
                 error_message = (
                     f"Tier 3 complexity exceeded the local execution budget ({self._timeout_for_score(score)}s). "
@@ -277,7 +302,10 @@ class CostAutopilotRouter:
                 model_name = local_model
                 tier_used = "Fallback Tier 1 (Local Qwen 1.5B)" if score < settings.ROUTING_TIER1_MAX else "Fallback Tier 2 (Local Llama 3.1 8B)"
                 try:
-                    response_text = consume_provider_result(self._try_ollama(local_model, sanitized_prompt, system_prompt, self._timeout_for_score(score)))
+                    response_text = invoke(
+                        provider_name, model_name, tier_used, "local Ollama fallback",
+                        lambda: self._try_ollama(local_model, sanitized_prompt, system_prompt, self._timeout_for_score(score)),
+                    )
                 except OllamaTimeoutError:
                     if groq_provider.is_configured():
                         try:
@@ -338,6 +366,8 @@ class CostAutopilotRouter:
             "model_name": model_name,
             "provider": provider_name,
             "token_source": token_source,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
             "actual_cost_usd": audit["selected"].get("actual_cost_usd"),
             "latency_seconds": round(time.time() - start_time, 3),
             "is_cached": False,
