@@ -1,5 +1,10 @@
+import os
 import re
-from typing import Dict, Any
+import logging
+from pathlib import Path
+from typing import Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
 
 class ComplexityClassifier:
     def __init__(self):
@@ -44,6 +49,63 @@ class ComplexityClassifier:
             "Reviewer": 0.35
         }
 
+        # Optional ML model artifact loading (XGBoost / GradientBoosting)
+        self.ml_model = None
+        self.tfidf_vectorizer = None
+        self._load_trained_ml_model()
+
+        # Benchmark calibration table (derived from HF R2-Bench / RoutingCompendium)
+        self.benchmark_matrix: Dict[str, Any] = {}
+        self._load_benchmark_matrix()
+
+    def _load_trained_ml_model(self):
+        try:
+            import joblib
+            gateway_dir = Path(__file__).parent
+            model_path = gateway_dir / "router_model.joblib"
+            tfidf_path = gateway_dir / "tfidf_vectorizer.joblib"
+
+            if model_path.exists() and tfidf_path.exists():
+                self.ml_model = joblib.load(str(model_path))
+                self.tfidf_vectorizer = joblib.load(str(tfidf_path))
+                logger.info("Successfully loaded pre-trained ML Router Model (XGBoost/GBDT) into ComplexityClassifier.")
+        except Exception as e:
+            logger.debug(f"ML model loading bypassed ({e}); using deterministic heuristic classifier engine.")
+
+    def _load_benchmark_matrix(self):
+        try:
+            matrix_path = Path(__file__).resolve().parents[3] / "data" / "model_quality_matrix.json"
+            if matrix_path.exists():
+                import json
+                with open(matrix_path, "r", encoding="utf-8") as f:
+                    self.benchmark_matrix = json.load(f)
+                logger.info(f"Loaded benchmark quality matrix with {len(self.benchmark_matrix.get('models', {}))} model calibrations.")
+        except Exception as e:
+            logger.debug(f"Benchmark quality matrix loading bypassed: {e}")
+
+    def is_ml_active(self) -> bool:
+        return self.ml_model is not None and self.tfidf_vectorizer is not None
+
+    def get_benchmark_status(self) -> Dict[str, Any]:
+        data_dir = Path(__file__).resolve().parents[3] / "data"
+        benchmark_file = data_dir / "benchmark_prompts.jsonl"
+        
+        benchmark_rows = 0
+        if benchmark_file.exists():
+            try:
+                with open(benchmark_file, "r", encoding="utf-8") as f:
+                    benchmark_rows = sum(1 for line in f if line.strip())
+            except Exception:
+                pass
+
+        return {
+            "benchmarks_loaded": bool(self.benchmark_matrix),
+            "benchmark_dataset_rows": benchmark_rows,
+            "calibrated_models": list(self.benchmark_matrix.get("models", {}).keys()),
+            "sources": self.benchmark_matrix.get("sources", ["R2-Bench (JiaqiXue/R2-Bench)", "RoutingCompendium (Wikit)"]),
+            "last_calibrated": self.benchmark_matrix.get("generated_at")
+        }
+
     def extract_features(self, prompt: str, agent_name: str = "General") -> Dict[str, Any]:
         prompt_lower = prompt.lower()
         
@@ -71,7 +133,8 @@ class ComplexityClassifier:
             "has_deep_domain": has_deep_domain,
             "has_quoted_payload": has_quoted_payload,
             "word_count": words,
-            "agent_weight": agent_weight
+            "agent_weight": agent_weight,
+            "ml_engine_active": self.is_ml_active()
         }
 
     def predict_score(self, prompt: str, agent_name: str = "General") -> float:
@@ -86,6 +149,7 @@ class ComplexityClassifier:
             "architecture_contribution": 0.0,
             "algorithm_contribution": 0.0,
             "agent_bias_contribution": round(feats["agent_weight"], 3),
+            "classifier_engine": "XGBoost/GBDT ML Model" if self.is_ml_active() else "Deterministic Intent Heuristics",
             "instruction_payload": {
                 "editing_intent": bool(feats["is_editing"]),
                 "coding_intent": bool(feats["is_coding"]),
@@ -95,6 +159,51 @@ class ComplexityClassifier:
             },
             "matched_signal_flags": [],
         }
+
+        # If trained ML model is available and prompt is not an explicit overriding proofread intent, use ML model prediction
+        if self.is_ml_active() and not feats["is_editing"]:
+            try:
+                import numpy as np
+                text_vec = self.tfidf_vectorizer.transform([prompt]).toarray()
+                # Construct linguistic features matching the trained model (6 features: editing, coding, frontier, quotes, word_ratio, len_ratio)
+                ling_vec = np.array([[
+                    feats["is_editing"],
+                    feats["is_coding"],
+                    feats["has_deep_domain"],
+                    feats["has_quoted_payload"],
+                    min(feats["word_count"] / 150.0, 1.0),
+                    min(len(prompt) / 800.0, 1.0),
+                ]], dtype=np.float32)
+                
+                # Check feature alignment with trained model
+                expected_n = getattr(self.ml_model, "n_features_in_", 806)
+                combined = np.hstack([text_vec, ling_vec])
+                if combined.shape[1] != expected_n:
+                    # Pad or truncate if feature count differs
+                    if combined.shape[1] < expected_n:
+                        pad = np.zeros((1, expected_n - combined.shape[1]), dtype=np.float32)
+                        combined = np.hstack([combined, pad])
+                    else:
+                        combined = combined[:, :expected_n]
+
+                probs = self.ml_model.predict_proba(combined)[0]
+                # Weighted continuous score: P(Tier 2)*0.50 + P(Tier 3)*1.00 + agent bias
+                ml_score = float(probs[1] * 0.50 + probs[2] * 0.95 + feats["agent_weight"] * 0.15)
+                ml_score = min(max(ml_score, 0.05), 1.0)
+                if feats["has_deep_domain"]:
+                    signals["matched_signal_flags"].append("deep_domain_keyword")
+                if feats["is_coding"]:
+                    signals["matched_signal_flags"].append("coding_intent")
+                signals["ml_class_probabilities"] = {
+                    "Tier 1 (Light)": round(float(probs[0]), 3),
+                    "Tier 2 (Balanced)": round(float(probs[1]), 3),
+                    "Tier 3 (Frontier)": round(float(probs[2]), 3),
+                }
+                return self._explanation(ml_score, feats, signals)
+            except Exception as e:
+                logger.debug(f"ML runtime prediction error ({e}), continuing with heuristic tree.")
+
+        # Heuristic Tree Execution
         if feats["is_editing"]:
             signals["matched_signal_flags"].append("editing_intent")
             signals["intent_contribution"] = 0.12
@@ -133,8 +242,6 @@ class ComplexityClassifier:
             score = signals["architecture_contribution"] + signals["length_contribution"] + feats["agent_weight"]
             return self._explanation(min(score, 0.68), feats, signals)
 
-        # Rule 1: Active grammar / formatting intent overrides technical payload
-        # Rule 2: Active coding with advanced algorithms / ML domain
         if feats["is_coding"] == 1.0 or feats["has_deep_domain"] == 1.0:
             if feats["has_deep_domain"] == 1.0:
                 signals["matched_signal_flags"].append("deep_domain_keyword")
@@ -151,7 +258,6 @@ class ComplexityClassifier:
                 score = signals["intent_contribution"] + signals["length_contribution"] + signals["agent_bias_contribution"]
                 return self._explanation(min(score, 0.68), feats, signals)
 
-        # Rule 3: General open-ended prompts
         signals["length_contribution"] = round((min(feats["word_count"], 400) / 400) * 0.50, 3)
         score = signals["length_contribution"] + feats["agent_weight"]
         return self._explanation(min(max(score, 0.15), 0.90), feats, signals)

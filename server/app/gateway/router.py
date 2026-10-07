@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 
 from ..core.config import settings
 from ..core.telemetry import telemetry
+from ..core.quality_tracker import quality_tracker
 from .classifier import classifier
 from .cache import cache
 from .redactor import redactor
@@ -16,17 +17,21 @@ from ..providers.groq_provider import groq_provider
 from ..providers.gemini_provider import gemini_provider
 from ..providers.openai_provider import openai_provider
 from ..providers.openrouter_provider import openrouter_provider
+from ..providers.huggingface_provider import huggingface_provider
 from ..core.ledger import EventType, append_entry
 
 logger = logging.getLogger(__name__)
 
 _FALLBACK_MODEL_COSTS = {
     "openai/gpt-oss-20b": {"input": 0.075, "output": 0.30, "confidence": 0.78, "provider": "Groq"},
-    "qwen/qwen3-32b": {"input": 0.29, "output": 0.59, "confidence": 0.84, "provider": "Groq"},
+    "qwen/qwen3.8-27b": {"input": 0.29, "output": 0.59, "confidence": 0.84, "provider": "Groq"},
     "openai/gpt-oss-120b": {"input": 0.15, "output": 0.60, "confidence": 0.90, "provider": "Groq"},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60, "confidence": 0.90, "provider": "OpenAI"},
     "gemini-flash-latest": {"input": 0.30, "output": 2.50, "confidence": 0.82, "provider": "Google Gemini"},
     "deepseek/deepseek-r1": {"input": 0.70, "output": 2.50, "confidence": 0.88, "provider": "OpenRouter"},
+    "Qwen/Qwen2.5-Coder-32B-Instruct": {"input": 0.0, "output": 0.0, "confidence": 0.85, "provider": "Hugging Face"},
+    "meta-llama/Llama-3.1-8B-Instruct": {"input": 0.0, "output": 0.0, "confidence": 0.80, "provider": "Hugging Face"},
+    "mistralai/Mistral-7B-Instruct-v0.3": {"input": 0.0, "output": 0.0, "confidence": 0.78, "provider": "Hugging Face"},
     "qwen2.5:1.5b": {"input": 0.0, "output": 0.0, "confidence": 0.70, "provider": "Ollama"},
     "llama3.1:8b-instruct-q4_K_M": {"input": 0.0, "output": 0.0, "confidence": 0.70, "provider": "Ollama"},
     "cache": {"input": 0.0, "output": 0.0, "confidence": 1.0, "provider": "Cache"},
@@ -72,7 +77,8 @@ class CostAutopilotRouter:
         workflow_id: Optional[str] = None,
         execution_mode: Optional[str] = None,
         force_cloud: bool = False,
-        classifier_debug: bool = False
+        classifier_debug: bool = False,
+        rag_context: Optional[str] = None
     ) -> Dict[str, Any]:
         start_time = time.time()
         requested_mode = (execution_mode or "auto").lower()
@@ -83,8 +89,11 @@ class CostAutopilotRouter:
         score: Optional[float] = None
         error_message: Optional[str] = None
 
+        # Augment prompt with RAG context if supplied
+        effective_prompt = f"{rag_context}\n\nUser Question/Instruction:\n{prompt}" if rag_context else prompt
+
         # 1. PII Redaction
-        sanitized_prompt, was_redacted = redactor.sanitize(prompt)
+        sanitized_prompt, was_redacted = redactor.sanitize(effective_prompt)
         prompt_hash = hashlib.sha256(sanitized_prompt.encode("utf-8")).hexdigest()
         cache_input = json.dumps({
             "prompt": sanitized_prompt,
@@ -167,6 +176,18 @@ class CostAutopilotRouter:
                     confidence=audit["selected"]["estimated_confidence"],
                     complexity_score=0.0,
                 )
+                quality_tracker.record(
+                    provider="Cache",
+                    model="cache",
+                    tier="Tier 0 (Exact-Match Cache)",
+                    complexity_score=0.0,
+                    latency_ms=round((time.time() - start_time) * 1000, 1),
+                    input_tokens=0,
+                    output_tokens=0,
+                    cost_usd=0.0,
+                    success=True,
+                    cache_hit=True
+                )
                 return {
                     "response": cached_result,
                     "complexity_score": 0.0,
@@ -234,6 +255,11 @@ class CostAutopilotRouter:
                     provider_name = "OpenRouter"
                     tier_used = "Manual (OpenRouter)"
                     response_text = invoke("OpenRouter", model_name, tier_used, "manual provider override", lambda: openrouter_provider.generate(model_name, sanitized_prompt, system_prompt))
+                elif prov in ("huggingface", "hf") and huggingface_provider.is_configured():
+                    model_name = model_override or "Qwen/Qwen2.5-Coder-32B-Instruct"
+                    provider_name = "Hugging Face"
+                    tier_used = "Manual (Hugging Face)"
+                    response_text = invoke("Hugging Face", model_name, tier_used, "manual provider override", lambda: huggingface_provider.generate(model_name, sanitized_prompt, system_prompt))
                 elif prov == "ollama":
                     model_name = model_override or settings.LOCAL_TIER2_MODEL
                     provider_name = "Ollama (Local)"
@@ -260,42 +286,91 @@ class CostAutopilotRouter:
                 ) if score > settings.ROUTING_TIER2_MAX else "Local Ollama generation timed out while offline mode was enforced."
 
         if not response_text and actual_mode in {"auto", "cloud"}:
+            # Tier 1 (Score < 0.30): Fast lightweight models
             if score < settings.ROUTING_TIER1_MAX:
                 tier_used = "Tier 1 (Fast Lightweight)"
-                model_name = settings.GROQ_TIER1_MODEL
+                if groq_provider.is_configured():
+                    try:
+                        provider_name = "Groq Cloud"
+                        model_name = settings.GROQ_TIER1_MODEL
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 1 fast lightweight task", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
+                        model_name = getattr(groq_provider, "last_model_used", None) or model_name
+                    except Exception as e:
+                        logger.warning(f"Tier 1 Groq failed: {e}")
+
+                if not response_text and gemini_provider.is_configured():
+                    try:
+                        provider_name = "Google Gemini"
+                        model_name = "gemini-2.0-flash-lite"
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 1 Gemini Flash Lite", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
+                    except Exception as e:
+                        logger.warning(f"Tier 1 Gemini failed: {e}")
+
+            # Tier 2 (0.30 <= Score <= 0.70): Balanced reasoning & full-stack code
             elif score <= settings.ROUTING_TIER2_MAX:
                 tier_used = "Tier 2 (Balanced Reasoning)"
-                model_name = settings.GROQ_TIER2_MODEL
+                if gemini_provider.is_configured():
+                    try:
+                        provider_name = "Google Gemini"
+                        model_name = "gemini-flash-latest"
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 2 Gemini Flash", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
+                    except Exception as e:
+                        logger.warning(f"Tier 2 Gemini failed: {e}")
+
+                if not response_text and groq_provider.is_configured():
+                    try:
+                        provider_name = "Groq Cloud"
+                        model_name = settings.GROQ_TIER2_MODEL
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 2 Groq Qwen 32B", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
+                        model_name = getattr(groq_provider, "last_model_used", None) or model_name
+                    except Exception as e:
+                        logger.warning(f"Tier 2 Groq failed: {e}")
+
+                if not response_text and huggingface_provider.is_configured():
+                    try:
+                        provider_name = "Hugging Face"
+                        model_name = "Qwen/Qwen2.5-Coder-32B-Instruct"
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 2 Hugging Face Qwen 32B Coder", lambda: huggingface_provider.generate(model_name, sanitized_prompt, system_prompt))
+                    except Exception as e:
+                        logger.warning(f"Tier 2 HuggingFace failed: {e}")
+
+            # Tier 3 (Score > 0.70): Deep reasoning, math proofs, distributed architecture
             else:
                 tier_used = "Tier 3 (Frontier Reasoning)"
-                model_name = settings.GROQ_TIER3_MODEL
+                if openrouter_provider.is_configured():
+                    try:
+                        provider_name = "OpenRouter"
+                        model_name = "deepseek/deepseek-r1"
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 3 OpenRouter DeepSeek R1", lambda: openrouter_provider.generate(model_name, sanitized_prompt, system_prompt))
+                    except Exception as e:
+                        logger.warning(f"Tier 3 OpenRouter failed: {e}")
 
-            if groq_provider.is_configured():
-                try:
-                    provider_name = "Groq Cloud"
-                    response_text = invoke(provider_name, model_name, tier_used, "cloud execution mode" if actual_mode == "cloud" else "complexity score matched automatic tier", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
-                    model_name = getattr(groq_provider, "last_model_used", None) or model_name
-                except Exception as e:
-                    logger.warning(f"Groq failed: {e}")
+                if not response_text and openai_provider.is_configured():
+                    try:
+                        provider_name = "OpenAI"
+                        model_name = "gpt-4o-mini"
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 3 OpenAI Frontier", lambda: openai_provider.generate(model_name, sanitized_prompt, system_prompt))
+                    except Exception as e:
+                        logger.warning(f"Tier 3 OpenAI failed: {e}")
 
-            if not response_text and actual_mode == "cloud" and gemini_provider.is_configured():
-                try:
-                    provider_name = "Google Gemini"
-                    model_name = "gemini-flash-latest"
-                    tier_used = "Fallback Tier 2 (Gemini Flash)"
-                    response_text = invoke(provider_name, model_name, tier_used, "Groq cloud fallback", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
-                except Exception as e:
-                    logger.warning(f"Gemini cloud fallback failed: {e}")
+                if not response_text and gemini_provider.is_configured():
+                    try:
+                        provider_name = "Google Gemini"
+                        model_name = "gemini-pro-latest"
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 3 Gemini Pro", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
+                    except Exception as e:
+                        logger.warning(f"Tier 3 Gemini failed: {e}")
 
-            if not response_text and actual_mode == "auto" and gemini_provider.is_configured():
-                try:
-                    provider_name = "Google Gemini"
-                    model_name = "gemini-flash-latest"
-                    tier_used = "Fallback Tier 2 (Gemini Flash)"
-                    response_text = invoke(provider_name, model_name, tier_used, "Groq fallback", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
-                except Exception as e:
-                    logger.warning(f"Gemini fallback failed: {e}")
+                if not response_text and groq_provider.is_configured():
+                    try:
+                        provider_name = "Groq Cloud"
+                        model_name = settings.GROQ_TIER3_MODEL
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 3 Groq 120B", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
+                        model_name = getattr(groq_provider, "last_model_used", None) or model_name
+                    except Exception as e:
+                        logger.warning(f"Tier 3 Groq failed: {e}")
 
+            # Fallback to local Ollama if all cloud options failed in auto mode
             if not response_text and actual_mode == "auto":
                 provider_name = "Ollama (Local Fallback)"
                 local_model = settings.LOCAL_TIER1_MODEL if score < settings.ROUTING_TIER1_MAX else settings.LOCAL_TIER2_MODEL
@@ -307,17 +382,7 @@ class CostAutopilotRouter:
                         lambda: self._try_ollama(local_model, sanitized_prompt, system_prompt, self._timeout_for_score(score)),
                     )
                 except OllamaTimeoutError:
-                    if groq_provider.is_configured():
-                        try:
-                            provider_name = "Groq Cloud"
-                            model_name = settings.GROQ_TIER2_MODEL
-                            tier_used = "Fallback Tier 2 (Balanced Reasoning)"
-                            response_text = invoke(provider_name, model_name, tier_used, "local Ollama timeout fallback", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
-                            model_name = getattr(groq_provider, "last_model_used", None) or model_name
-                        except Exception as e:
-                            logger.warning(f"Groq timeout fallback failed: {e}")
-                    if not response_text:
-                        error_message = "Cloud providers were unavailable and local Ollama exceeded its execution budget."
+                    error_message = "All cloud providers failed and local Ollama exceeded its timeout budget."
 
         # Preserve the prior automatic path's behavior for callers that do not
         # pass an explicit mode, while making the mode selection observable.
@@ -358,6 +423,21 @@ class CostAutopilotRouter:
             complexity_score=score,
         )
 
+        # Passive quality observation recording for adaptive training
+        latency_seconds = round(time.time() - start_time, 3)
+        quality_tracker.record(
+            provider=provider_name,
+            model=model_name,
+            tier=tier_used,
+            complexity_score=score or 0.0,
+            latency_ms=latency_seconds * 1000,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=audit["selected"].get("actual_cost_usd") or 0.0,
+            success=bool(response_text),
+            cache_hit=False
+        )
+
         return {
             "response": response_text or "",
             "error": error_message if not response_text else None,
@@ -369,7 +449,7 @@ class CostAutopilotRouter:
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "actual_cost_usd": audit["selected"].get("actual_cost_usd"),
-            "latency_seconds": round(time.time() - start_time, 3),
+            "latency_seconds": latency_seconds,
             "is_cached": False,
             "was_redacted": was_redacted,
             "privacy_mode": is_offline_enforced,

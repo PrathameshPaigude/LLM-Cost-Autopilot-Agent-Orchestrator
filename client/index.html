@@ -4,166 +4,561 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agent Orchestrator & LLM Cost Autopilot</title>
-    <link rel="stylesheet" href="css/styles.css?v=1.3.1">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="css/styles.css?v=2.0.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
-<body>
-    <div class="app-container">
-        <!-- Header -->
-        <header class="top-nav">
-            <div class="brand">
-                <div class="logo-icon">⚡</div>
-                <div>
-                    <h1>Agent Orchestration Platform</h1>
-                    <p class="subtitle">Multi-Agent Cost Autopilot & Dynamic Execution Matrix</p>
+<body class="theme-dark">
+    <div class="app-layout">
+        <!-- Main Application Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <a href="/" class="app-brand">
+                    <svg class="brand-logo" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                    <span class="brand-title">Agent Orchestrator</span>
+                    <span class="brand-version">v1.5.0</span>
+                </a>
+
+                <!-- Mode Switcher Tabs -->
+                <nav class="mode-nav" aria-label="Application Sections">
+                    <button class="nav-tab active" id="tab-llm-chat" onclick="switchMainSection('chat')">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span>LLM Chat</span>
+                    </button>
+                    <button class="nav-tab" id="tab-coding-agent" onclick="switchMainSection('coding')">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="16 18 22 12 16 6"></polyline>
+                            <polyline points="8 6 2 12 8 18"></polyline>
+                        </svg>
+                        <span>Coding Agent</span>
+                    </button>
+                    <button class="nav-tab" id="tab-analytics" onclick="switchMainSection('analytics')">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                        </svg>
+                        <span>Router Analytics</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Provider Status Badges -->
+            <div class="header-center">
+                <div class="provider-matrix" id="provider-badges">
+                    <div class="provider-chip" id="chip-gemini" title="Google Gemini Flash & Pro"><span class="status-indicator"></span>Gemini</div>
+                    <div class="provider-chip" id="chip-groq" title="Groq Cloud Fast Models"><span class="status-indicator"></span>Groq</div>
+                    <div class="provider-chip" id="chip-huggingface" title="Hugging Face Serverless Hub"><span class="status-indicator"></span>HuggingFace</div>
+                    <div class="provider-chip" id="chip-openrouter" title="OpenRouter Free Models"><span class="status-indicator"></span>OpenRouter</div>
+                    <div class="provider-chip" id="chip-openai" title="OpenAI Frontier"><span class="status-indicator"></span>OpenAI</div>
+                    <div class="provider-chip" id="chip-ollama" title="Local Offline Models"><span class="status-indicator"></span>Ollama</div>
                 </div>
             </div>
 
-            <!-- Provider Live Status Badges -->
-            <div class="provider-status-group" id="provider-badges">
-                <div class="prov-pill" id="pill-gemini"><span class="dot"></span> Gemini</div>
-                <div class="prov-pill" id="pill-groq"><span class="dot"></span> Groq</div>
-                <div class="prov-pill" id="pill-openrouter"><span class="dot"></span> OpenRouter</div>
-                <div class="prov-pill" id="pill-openai"><span class="dot"></span> OpenAI</div>
-                <div class="prov-pill" id="pill-ollama"><span class="dot"></span> Ollama</div>
-            </div>
+            <!-- Right Controls & Telemetry -->
+            <div class="header-right">
+                <div class="telemetry-compact">
+                    <div class="metric-item">
+                        <span class="metric-label">Savings</span>
+                        <span class="metric-value text-success" id="stat-saved">$0.0000</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Tokens</span>
+                        <span class="metric-value" id="stat-tokens">0</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Energy</span>
+                        <span class="metric-value text-accent" id="stat-energy">0.0 Wh</span>
+                    </div>
+                </div>
 
-            <!-- Telemetry Badges -->
-            <div class="telemetry-bar">
-                <div class="telemetry-badge">
-                    <span class="badge-label">Cloud Money Saved</span>
-                    <span class="badge-value green" id="stat-saved">$0.0000</span>
-                </div>
-                <div class="telemetry-badge">
-                    <span class="badge-label">Tokens Processed</span>
-                    <span class="badge-value" id="stat-tokens">0</span>
-                </div>
-                <div class="telemetry-badge">
-                    <span class="badge-label">Energy Saved</span>
-                    <span class="badge-value blue" id="stat-energy">0.0 Wh</span>
-                </div>
-            </div>
-
-            <!-- Privacy Toggle -->
-            <div class="privacy-control">
-                <label class="switch">
-                    <input type="checkbox" id="privacy-toggle">
-                    <span class="slider round"></span>
-                </label>
-                <div class="privacy-label">
-                    <span id="privacy-status-text">🌐 Hybrid Cloud Free</span>
-                    <span class="privacy-sub" id="privacy-sub-text">Ollama + Gemini + Groq</span>
+                <div class="action-buttons">
+                    <button class="btn btn-secondary btn-sm" onclick="openModal('modal-bridge')" title="Context Bridge for ChatGPT/Gemini/Claude">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                            <polyline points="16 6 12 2 8 6"></polyline>
+                            <line x1="12" y1="2" x2="12" y2="15"></line>
+                        </svg>
+                        <span>Bridge</span>
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="openModal('modal-rag')" title="Manage Local RAG Knowledge Index">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                        </svg>
+                        <span>RAG</span>
+                    </button>
+                    <button class="btn btn-secondary btn-sm" id="btn-privacy" onclick="togglePrivacyMode()" title="Toggle Offline Privacy Mode">
+                        <span id="privacy-icon">🌐</span>
+                        <span id="privacy-label">Hybrid</span>
+                    </button>
                 </div>
             </div>
         </header>
 
-        <!-- Main Content -->
-        <main class="main-layout">
-            <!-- Left Panel: Orchestration & Subtasks DAG -->
-            <aside class="sidebar">
-                <div class="sidebar-header">
-                    <h2>Workflow Execution Graph</h2>
-                    <span class="badge-status" id="workflow-status">IDLE</span>
-                </div>
-                
-                <div class="subtasks-container" id="subtasks-list">
-                    <div class="empty-state">No active workflow. Enter a task below to decompose and execute.</div>
-                </div>
+        <!-- SECTION 1: LLM CHAT WORKSPACE -->
+        <main class="workspace-section active" id="section-chat">
+            <div class="chat-layout">
+                <!-- Chat History Sidebar -->
+                <aside class="chat-sidebar">
+                    <div class="sidebar-top">
+                        <button class="btn btn-primary btn-block" onclick="startNewChat()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            <span>New Conversation</span>
+                        </button>
+                    </div>
 
-                <section class="pareto-panel" aria-labelledby="pareto-title">
-                    <div class="pareto-header">
-                        <div>
-                            <p class="eyebrow">Product signal</p>
-                            <h2 id="pareto-title">Cost / quality Pareto</h2>
+                    <div class="chat-session-list" id="chat-session-list">
+                        <div class="session-item active">Current Session</div>
+                    </div>
+
+                    <div class="sidebar-footer">
+                        <div class="classifier-status-box" id="classifier-info">
+                            <div class="status-row">
+                                <span class="status-label">Classifier:</span>
+                                <span class="status-val" id="ml-status-text">XGBoost / GBDT Active</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="status-label">RAG Chunks:</span>
+                                <span class="status-val" id="rag-chunks-count">0 chunks</span>
+                            </div>
                         </div>
-                        <div class="pareto-summary" id="pareto-summary">Waiting for routed traffic</div>
                     </div>
-                    <div class="pareto-chart-wrap">
-                        <canvas id="pareto-chart" aria-label="Scatter plot of estimated cost versus confidence over time"></canvas>
-                        <div class="pareto-empty" id="pareto-empty">Run a task to populate the live tradeoff view.</div>
+                </aside>
+
+                <!-- Chat Main Stream -->
+                <section class="chat-main">
+                    <div class="chat-toolbar">
+                        <div class="toolbar-left">
+                            <label for="chat-model-select" class="control-label">Model Route:</label>
+                            <select id="chat-model-select" class="select-control">
+                                <option value="auto">Auto Cost Autopilot (3-Tier Matrix)</option>
+                                <optgroup label="Free Cloud Tiers">
+                                    <option value="gemini:gemini-2.0-flash">Google Gemini 2.0 Flash</option>
+                                    <option value="gemini:gemini-2.0-flash-lite">Google Gemini 2.0 Flash Lite</option>
+                                    <option value="groq:qwen/qwen3-32b">Groq Qwen3 32B</option>
+                                    <option value="groq:openai/gpt-oss-20b">Groq GPT-OSS 20B</option>
+                                    <option value="huggingface:Qwen/Qwen2.5-Coder-32B-Instruct">Hugging Face Qwen 2.5 Coder 32B</option>
+                                    <option value="huggingface:meta-llama/Llama-3.1-8B-Instruct">Hugging Face Llama 3.1 8B</option>
+                                    <option value="openrouter:deepseek/deepseek-r1">OpenRouter DeepSeek R1</option>
+                                    <option value="openrouter:qwen/qwen-2.5-coder-32b-instruct:free">OpenRouter Qwen 2.5 Coder 32B</option>
+                                </optgroup>
+                                <optgroup label="Frontier Commercial">
+                                    <option value="openai:gpt-4o-mini">OpenAI GPT-4o Mini</option>
+                                    <option value="openai:gpt-4o">OpenAI GPT-4o</option>
+                                    <option value="openai:o3-mini">OpenAI o3-mini (Reasoning)</option>
+                                </optgroup>
+                                <optgroup label="Local Offline (Ollama)">
+                                    <option value="ollama:qwen2.5:1.5b">Ollama Qwen 2.5 1.5B (Fast)</option>
+                                    <option value="ollama:llama3.1:8b-instruct-q4_K_M">Ollama Llama 3.1 8B (Balanced)</option>
+                                    <option value="ollama:deepseek-r1:8b">Ollama DeepSeek R1 8B</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="toolbar-right">
+                            <label class="checkbox-inline">
+                                <input type="checkbox" id="chat-rag-toggle" checked>
+                                <span>Inject RAG Context</span>
+                            </label>
+                        </div>
                     </div>
-                    <div class="pareto-legend">
-                        <span><i class="legend-dot tier-1"></i>Tier 1</span>
-                        <span><i class="legend-dot tier-2"></i>Tier 2</span>
-                        <span><i class="legend-dot tier-3"></i>Tier 3</span>
-                        <span><i class="legend-diamond"></i>Reviewed outcome</span>
+
+                    <!-- Messages Container -->
+                    <div class="messages-container" id="chat-messages">
+                        <div class="chat-welcome">
+                            <h2>LLM Chat & Intelligent Cost Autopilot</h2>
+                            <p>Every query is analyzed for semantic complexity and routed to the most cost-effective model tier.</p>
+                            <div class="prompt-suggestions">
+                                <button class="suggestion-chip" onclick="setChatInput('Write a Python function to parse and validate semantic version strings')">Python SemVer Validator</button>
+                                <button class="suggestion-chip" onclick="setChatInput('Correct the grammar in the sentence: She do not likes to code in Python.')">Grammar Proofreading (Tier 1)</button>
+                                <button class="suggestion-chip" onclick="setChatInput('Explain how distributed consensus works in Raft and compare with Paxos')">Distributed Consensus (Tier 3)</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Input Box -->
+                    <div class="chat-input-area">
+                        <form id="chat-form" onsubmit="handleChatSubmit(event)">
+                            <div class="input-wrapper">
+                                <textarea id="chat-input" rows="2" placeholder="Send a message or instruction..." onkeydown="handleChatKeyDown(event)"></textarea>
+                                <button type="submit" class="btn btn-primary btn-icon" id="btn-chat-send" title="Send Message">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                    </svg>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- SECTION 2: CODING AGENT WORKSPACE -->
+        <main class="workspace-section" id="section-coding">
+            <div class="ide-layout">
+                <!-- Left: File Explorer & RAG Tree -->
+                <aside class="ide-explorer">
+                    <div class="panel-header">
+                        <span class="panel-title">WORKSPACE FILES</span>
+                        <button class="btn-tool" onclick="refreshWorkspaceFiles()" title="Refresh file list">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M23 4v6h-6"></path>
+                                <path d="M1 20v-6h6"></path>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="file-tree" id="file-tree-list">
+                        <div class="empty-hint">Loading files...</div>
+                    </div>
+
+                    <!-- Pareto Tradeoff Summary -->
+                    <div class="panel-header mt-auto">
+                        <span class="panel-title">COST / QUALITY PARETO</span>
+                    </div>
+                    <div class="ide-pareto-wrap">
+                        <canvas id="pareto-chart" width="260" height="130"></canvas>
+                        <div class="pareto-caption" id="pareto-summary">No workflow runs yet</div>
+                    </div>
+                </aside>
+
+                <!-- Center: Code Editor & Workflow Prompt -->
+                <section class="ide-center">
+                    <div class="editor-header">
+                        <div class="editor-tabs" id="editor-tabs">
+                            <div class="tab-item active" id="active-file-tab">main.py</div>
+                        </div>
+                        <div class="editor-actions">
+                            <button class="btn btn-secondary btn-xs" onclick="saveActiveFile()">Save File</button>
+                        </div>
+                    </div>
+                    <div class="editor-body">
+                        <textarea id="code-editor" class="code-editor" spellcheck="false" placeholder="Select a file from the left to view or edit..."></textarea>
+                    </div>
+
+                    <!-- Workflow Task Input Dock -->
+                    <div class="ide-dock">
+                        <div class="dock-header">
+                            <span class="dock-label">Agent Orchestration Goal</span>
+                            <div class="dock-options">
+                                <label class="checkbox-inline">
+                                    <input type="checkbox" id="wf-parallel-toggle" checked>
+                                    <span>Parallel Specialist Execution</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="dock-input-row">
+                            <textarea id="wf-prompt-input" rows="2" placeholder="Describe the engineering feature or system for the agent team to build..."></textarea>
+                            <button class="btn btn-primary" id="btn-wf-run" onclick="dispatchWorkflow()">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                </svg>
+                                <span>Dispatch Agents</span>
+                            </button>
+                        </div>
                     </div>
                 </section>
 
-                <!-- HITL Approval Box (Hidden by default) -->
-                <div class="hitl-box" id="hitl-panel" style="display: none;">
-                    <h3>⚠️ Human-in-the-Loop Review</h3>
-                    <p>Confidence score is below 0.80. Please inspect and approve or reject.</p>
-                    <div class="hitl-actions">
-                        <button class="btn btn-success" id="btn-approve">Approve</button>
-                        <button class="btn btn-danger" id="btn-reject">Reject</button>
+                <!-- Right: Multi-Agent Execution Graph & Review -->
+                <aside class="ide-workflow">
+                    <div class="panel-header">
+                        <span class="panel-title">MULTI-AGENT EXECUTION GRAPH</span>
+                        <span class="status-badge" id="wf-status-badge">IDLE</span>
+                    </div>
+
+                    <div class="workflow-dag" id="wf-task-list">
+                        <div class="empty-hint">Enter an engineering goal in the center dock to decompose into specialist tasks.</div>
+                    </div>
+
+                    <!-- Human In The Loop Review Panel -->
+                    <div class="hitl-panel" id="hitl-panel" style="display: none;">
+                        <div class="hitl-header">
+                            <span class="hitl-title">Human Verification Required</span>
+                        </div>
+                        <p class="hitl-desc">Review confidence score is below threshold. Inspect generated artifacts before approval.</p>
+                        <div class="hitl-buttons">
+                            <button class="btn btn-success btn-sm" id="btn-approve" onclick="approveHITL()">Approve</button>
+                            <button class="btn btn-danger btn-sm" id="btn-reject" onclick="rejectHITL()">Reject</button>
+                        </div>
+                    </div>
+
+                    <!-- Output Console & Ledger -->
+                    <div class="panel-header">
+                        <span class="panel-title">SYNTHESIS & OUTPUT</span>
+                    </div>
+                    <div class="ide-console" id="wf-console-output">
+                        <div class="empty-hint">Agent outputs and reviewer synthesis will appear here.</div>
+                    </div>
+                </aside>
+            </div>
+        </main>
+
+        <!-- SECTION 3: ROUTER ANALYTICS DASHBOARD -->
+        <main class="workspace-section" id="section-analytics">
+            <div class="analytics-layout">
+                <div class="analytics-header-row">
+                    <h2 class="analytics-title">Router Performance Analytics</h2>
+                    <div class="analytics-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="loadRouterAnalytics()" title="Refresh Analytics Data">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M23 4v6h-6"></path>
+                                <path d="M1 20v-6h6"></path>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                            <span>Refresh</span>
+                        </button>
+                        <button class="btn btn-primary btn-sm" id="btn-retrain" onclick="retrainClassifier()" title="Retrain XGBoost Classifier">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06c.5.5 1.21.67 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.5.5-.67 1.21-.33 1.82V9c.26.604.852 1 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                            <span>Retrain Classifier</span>
+                        </button>
                     </div>
                 </div>
-            </aside>
 
-            <!-- Center Panel: Chat & Agent Output -->
-            <section class="workspace">
-                <div class="workspace-header">
-                    <div class="active-agent-banner" id="active-agent-banner">
-                        <span class="agent-tag" id="current-agent-tag">Supervisor</span>
-                        <span class="plan-text" id="plan-overview-text">Ready for instructions...</span>
+                <!-- Summary Cards -->
+                <div class="analytics-summary-row" id="analytics-summary">
+                    <div class="summary-card">
+                        <span class="card-label">Total Observations</span>
+                        <span class="card-val" id="an-total-obs">0</span>
                     </div>
-
-                    <!-- Model Override Selector -->
-                    <div class="mode-selector-wrapper">
-                        <label for="mode-select">Execution Mode:</label>
-                        <select id="mode-select" class="mode-dropdown">
-                            <option value="auto">⚡ Auto Cost Autopilot (3-Tier Dynamic Matrix)</option>
-                            <optgroup label="Free Cloud Tiers">
-                                <option value="gemini:gemini-2.0-flash">Google Gemini 2.0 Flash (Free Tier)</option>
-                                <option value="gemini:gemini-2.0-flash-lite">Google Gemini 2.0 Flash Lite (Ultra Fast)</option>
-                                <option value="groq:qwen/qwen3-32b">Groq Qwen3 32B</option>
-                                <option value="groq:openai/gpt-oss-20b">Groq GPT-OSS 20B</option>
-                                <option value="groq:deepseek-r1-distill-llama-70b">Groq DeepSeek R1 Distill 70B</option>
-                                <option value="openrouter:deepseek/deepseek-r1">OpenRouter DeepSeek R1 ($0.70/$2.50 per 1M tokens)</option>
-                                <option value="openrouter:qwen/qwen-2.5-coder-32b-instruct:free">OpenRouter Qwen 2.5 Coder 32B (Free)</option>
-                            </optgroup>
-                            <optgroup label="Commercial Frontier (OpenAI)">
-                                <option value="openai:gpt-4o-mini">OpenAI GPT-4o Mini</option>
-                                <option value="openai:gpt-4o">OpenAI GPT-4o</option>
-                                <option value="openai:o3-mini">OpenAI o3-mini (Reasoning)</option>
-                            </optgroup>
-                            <optgroup label="100% Offline Local (Ollama)">
-                                <option value="ollama:qwen2.5:1.5b">Local Ollama Qwen 2.5 1.5B (Fast)</option>
-                                <option value="ollama:llama3.1:8b-instruct-q4_K_M">Local Ollama Llama 3.1 8B (Balanced)</option>
-                                <option value="ollama:deepseek-r1:8b">Local Ollama DeepSeek R1 8B</option>
-                            </optgroup>
-                        </select>
+                    <div class="summary-card">
+                        <span class="card-label">User Feedback</span>
+                        <span class="card-val" id="an-total-feedback">0</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="card-label">Training Ready</span>
+                        <span class="card-val" id="an-train-ready">No</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="card-label">Classifier Engine</span>
+                        <span class="card-val" id="an-classifier-engine">Heuristics</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="card-label">Benchmark Rows</span>
+                        <span class="card-val" id="an-bench-rows">0</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="card-label">Model Accuracy</span>
+                        <span class="card-val" id="an-accuracy">N/A</span>
                     </div>
                 </div>
 
-                <div class="output-container" id="output-box">
-                    <div class="placeholder-msg">
-                        <h3>Multi-Agent Cost Autopilot & Real-Time Gateway</h3>
-                        <p>Deconstructs complex goals across Supervisor, Code, Analysis, Writing, Research, and Computer Vision specialists.</p>
-                        
-                        <div class="sample-chips">
-                            <button class="chip" onclick="setPrompt('Build a high-performance FastAPI microservice with SQLite CRUD, JWT authentication, and rate limiting')">🚀 Build Full API</button>
-                            <button class="chip" onclick="setPrompt('Correct the grammar in the sentence: Write a complex code to train xgboost model with cross validation')">✏️ Grammar Check (Tier 1 Test)</button>
-                            <button class="chip" onclick="setPrompt('Design a YOLOv8 real-time edge obstacle detection and tracking architecture for autonomous drones')">👁️ Vision Agent (YOLOv8)</button>
-                            <button class="chip" onclick="setPrompt('Compare Transformer Attention vs Mamba State Space Models for long-context sequence modeling')">🔬 Research Agent</button>
+                <!-- Model Performance Table -->
+                <div class="analytics-panel">
+                    <div class="panel-header">
+                        <span class="panel-title">MODEL PERFORMANCE MATRIX</span>
+                    </div>
+                    <div class="analytics-table-wrap">
+                        <table class="analytics-table" id="model-perf-table">
+                            <thead>
+                                <tr>
+                                    <th>Model</th>
+                                    <th>Requests</th>
+                                    <th>Avg Latency</th>
+                                    <th>Total Tokens</th>
+                                    <th>Total Cost</th>
+                                    <th>Error Rate</th>
+                                    <th>Avg Rating</th>
+                                    <th>Last Used</th>
+                                </tr>
+                            </thead>
+                            <tbody id="model-perf-tbody">
+                                <tr><td colspan="8" class="empty-hint">No observations yet. Send prompts to start collecting data.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="analytics-two-col">
+                    <!-- Benchmark Status -->
+                    <div class="analytics-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">HUGGINGFACE BENCHMARK STATUS</span>
+                        </div>
+                        <div class="benchmark-info" id="benchmark-info">
+                            <div class="bench-row"><span class="bench-label">Loaded:</span><span id="bench-loaded">No</span></div>
+                            <div class="bench-row"><span class="bench-label">Dataset Rows:</span><span id="bench-dataset-rows">0</span></div>
+                            <div class="bench-row"><span class="bench-label">Last Calibrated:</span><span id="bench-last-cal">Never</span></div>
+                            <div class="bench-row"><span class="bench-label">Sources:</span><span id="bench-sources">None</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Training Report -->
+                    <div class="analytics-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">LATEST TRAINING REPORT</span>
+                        </div>
+                        <div class="training-report" id="training-report">
+                            <div class="bench-row"><span class="bench-label">Engine:</span><span id="tr-engine">N/A</span></div>
+                            <div class="bench-row"><span class="bench-label">Samples:</span><span id="tr-samples">0</span></div>
+                            <div class="bench-row"><span class="bench-label">Accuracy:</span><span id="tr-accuracy">N/A</span></div>
+                            <div class="bench-row"><span class="bench-label">Tier 1 F1:</span><span id="tr-f1-t1">N/A</span></div>
+                            <div class="bench-row"><span class="bench-label">Tier 2 F1:</span><span id="tr-f1-t2">N/A</span></div>
+                            <div class="bench-row"><span class="bench-label">Tier 3 F1:</span><span id="tr-f1-t3">N/A</span></div>
+                            <div class="bench-row"><span class="bench-label">Duration:</span><span id="tr-duration">N/A</span></div>
+                            <div class="bench-row"><span class="bench-label">Trained At:</span><span id="tr-trained-at">N/A</span></div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Input Footer -->
-                <div class="input-dock">
-                    <textarea id="prompt-input" rows="2" placeholder="Describe what you want the multi-agent team to build..."></textarea>
-                    <button class="btn btn-primary" id="btn-run">
-                        <span>Dispatch Tasks</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                    </button>
-                </div>
-            </section>
+            </div>
         </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-left">
+                <span>Agent Orchestrator Platform</span>
+                <span class="separator">|</span>
+                <span>Zero-Cost Execution Matrix</span>
+            </div>
+            <div class="footer-right">
+                <a href="#privacy" onclick="openModal('modal-privacy'); return false;">Privacy Policy</a>
+                <span class="separator">|</span>
+                <a href="#terms" onclick="openModal('modal-terms'); return false;">Terms of Service</a>
+                <span class="separator">|</span>
+                <a href="https://github.com/PrathameshPaigude/LLM-Cost-Autopilot-Agent-Orchestrator" target="_blank" rel="noopener">GitHub Repository</a>
+            </div>
+        </footer>
     </div>
 
-    <script src="js/app.js?v=1.3.1"></script>
+    <!-- MODAL 1: CONTEXT BRIDGE -->
+    <div class="modal-overlay" id="modal-bridge" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">Cross-LLM Context Bridge</h3>
+                <button class="modal-close" onclick="closeModal('modal-bridge')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">
+                    Seamlessly transfer active conversation state and workspace code to ChatGPT, Google Gemini, Claude, or local tools without losing context or wasting tokens.
+                </p>
+                <div class="form-group">
+                    <label for="bridge-platform">Target Destination Platform:</label>
+                    <select id="bridge-platform" class="select-control" onchange="generateBridgePrompt()">
+                        <option value="chatgpt">ChatGPT (OpenAI)</option>
+                        <option value="gemini">Google Gemini</option>
+                        <option value="claude">Claude (Anthropic)</option>
+                        <option value="ollama">Local Ollama / Universal</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="bridge-output">Generated Transfer Prompt:</label>
+                    <textarea id="bridge-output" class="code-textarea" rows="8" readonly></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('modal-bridge')">Close</button>
+                <button class="btn btn-primary" onclick="copyBridgePrompt()">
+                    <span id="copy-btn-text">Copy Prompt to Clipboard</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: RAG KNOWLEDGE BASE -->
+    <div class="modal-overlay" id="modal-rag" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">Local RAG Knowledge Engine</h3>
+                <button class="modal-close" onclick="closeModal('modal-rag')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">
+                    Indexes workspace code and documentation into line-bounded semantic chunks. Automatically injects top relevant code snippets into prompt context.
+                </p>
+                <div class="rag-stat-cards">
+                    <div class="stat-card">
+                        <span class="card-label">Indexed Chunks</span>
+                        <span class="card-val" id="modal-rag-chunks">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="card-label">Indexed Files</span>
+                        <span class="card-val" id="modal-rag-files">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="card-label">Vocabulary Size</span>
+                        <span class="card-val" id="modal-rag-vocab">0</span>
+                    </div>
+                </div>
+
+                <div class="form-group mt-3">
+                    <label for="rag-test-query">Test Semantic Search:</label>
+                    <div class="input-inline">
+                        <input type="text" id="rag-test-query" class="input-control" placeholder="e.g. FastAPI routes, ComplexityClassifier, token rates">
+                        <button class="btn btn-secondary" onclick="testRAGSearch()">Search</button>
+                    </div>
+                </div>
+                <div class="search-results" id="rag-search-results"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger btn-sm" onclick="clearRAGIndex()">Clear Index</button>
+                <button class="btn btn-primary" onclick="reindexWorkspace()">Re-Index Workspace</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: PRIVACY POLICY -->
+    <div class="modal-overlay" id="modal-privacy" style="display: none;">
+        <div class="modal-container modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title">Privacy Policy</h3>
+                <button class="modal-close" onclick="closeModal('modal-privacy')">&times;</button>
+            </div>
+            <div class="modal-body legal-content">
+                <h4>1. Commitment to User Privacy</h4>
+                <p>Agent Orchestration Platform is built with strict privacy-by-design principles. We do not sell, monetize, or track your personal information or prompt history.</p>
+
+                <h4>2. Offline Privacy Mode & Local Execution</h4>
+                <p>When Privacy Mode is enabled, all cloud API outbound calls are blocked. All prompt processing, feature extraction, and multi-agent workflows execute strictly on your local hardware via Ollama and local storage.</p>
+
+                <h4>3. Automatic PII Redaction</h4>
+                <p>All prompts routed through the Cost Autopilot Gateway pass through a local regex and entity sanitizer to redact sensitive identifiers (emails, phone numbers, API tokens) prior to any external model dispatch.</p>
+
+                <h4>4. Data Retention & Caching</h4>
+                <p>Exact-match cache entries and evidence ledgers are stored in local memory and local filesystem records. No third-party analytics scripts or external tracking pixels are used.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModal('modal-privacy')">I Understand</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: TERMS OF SERVICE -->
+    <div class="modal-overlay" id="modal-terms" style="display: none;">
+        <div class="modal-container modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title">Terms of Service</h3>
+                <button class="modal-close" onclick="closeModal('modal-terms')">&times;</button>
+            </div>
+            <div class="modal-body legal-content">
+                <h4>1. License and Open-Source Terms</h4>
+                <p>Agent Orchestrator is provided under the MIT Open Source License. You are free to inspect, modify, and host the platform on private infrastructure.</p>
+
+                <h4>2. Model Routing & Cost Disclaimers</h4>
+                <p>Cost calculations, token rates, and savings estimates presented in telemetry dashboards are illustrative benchmarks based on published provider rate sheets. Actual provider billing may vary based on exact billing terms.</p>
+
+                <h4>3. AI-Generated Code & Verification</h4>
+                <p>Outputs generated by specialist agents (CodeAgent, ResearchAgent, AnalysisAgent) are suggestions and should be reviewed and verified by human developers before deployment into production environments.</p>
+
+                <h4>4. Third-Party Provider APIs</h4>
+                <p>Use of Google Gemini, Groq Cloud, OpenAI, OpenRouter, and Hugging Face is subject to their respective terms of service and acceptable use policies.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModal('modal-terms')">Agree & Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js?v=2.0.0"></script>
 </body>
 </html>

@@ -41,8 +41,12 @@ class Settings(BaseConfig):
 
     # Groq Cloud Settings
     GROQ_TIER1_MODEL: str = os.getenv("GROQ_TIER1_MODEL", "openai/gpt-oss-20b")
-    GROQ_TIER2_MODEL: str = os.getenv("GROQ_TIER2_MODEL", "qwen/qwen3-32b")
+    GROQ_TIER2_MODEL: str = os.getenv("GROQ_TIER2_MODEL", "qwen/qwen3.8-27b")
     GROQ_TIER3_MODEL: str = os.getenv("GROQ_TIER3_MODEL", "openai/gpt-oss-120b")
+
+    # Hugging Face Settings
+    HUGGINGFACE_API_KEY: str = os.getenv("HUGGINGFACE_API_KEY", os.getenv("HF_TOKEN", ""))
+    HF_DEFAULT_MODEL: str = os.getenv("HF_DEFAULT_MODEL", "Qwen/Qwen2.5-Coder-32B-Instruct")
 
     # Dynamic API Key Properties
     @property
@@ -65,9 +69,15 @@ class Settings(BaseConfig):
         reload_env()
         return os.getenv("OPENROUTER_API_KEY", "")
 
+    @property
+    def HF_API_KEY(self) -> str:
+        reload_env()
+        return os.getenv("HUGGINGFACE_API_KEY", os.getenv("HF_TOKEN", ""))
+
     # Routing Thresholds
     ROUTING_TIER1_MAX: float = float(os.getenv("ROUTING_TIER1_MAX", "0.30"))
     ROUTING_TIER2_MAX: float = float(os.getenv("ROUTING_TIER2_MAX", "0.70"))
     CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.80"))
 
 settings = Settings()
+

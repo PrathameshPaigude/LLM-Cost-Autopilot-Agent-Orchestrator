@@ -8,11 +8,13 @@ from ..core.config import settings
 logger = logging.getLogger(__name__)
 
 GEMINI_MODEL_MAP = {
-    "gemini-2.0-flash": "gemini-flash-latest",
-    "gemini-2.0-flash-lite": "gemini-flash-lite-latest",
-    "gemini-1.5-flash": "gemini-flash-latest",
-    "gemini-1.5-pro": "gemini-pro-latest",
-    "gemini-2.5-pro": "gemini-pro-latest"
+    "gemini-2.0-flash": "gemini-3.8-flash",
+    "gemini-2.0-flash-lite": "gemini-3.8-flash",
+    "gemini-1.5-flash": "gemini-3.8-flash",
+    "gemini-1.5-pro": "gemini-3.8-flash",
+    "gemini-2.5-pro": "gemini-3.8-flash",
+    "gemini-pro-latest": "gemini-3.8-flash",
+    "gemini-flash-latest": "gemini-3.8-flash"
 }
 
 class GeminiProvider:
@@ -23,7 +25,7 @@ class GeminiProvider:
         key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "") or self.api_key
         return bool(key and key.strip())
 
-    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: Any = (3.0, 8.0)) -> Dict[str, Any]:
+    def generate(self, model: str, prompt: str, system_prompt: Optional[str] = None, timeout: Any = (5.0, 20.0)) -> Dict[str, Any]:
         api_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "") or self.api_key
         if not api_key:
             raise RuntimeError("Gemini API key is missing.")

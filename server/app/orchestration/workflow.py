@@ -1,7 +1,8 @@
 import logging
 import uuid
-from typing import Any, Callable, Optional
-from .state import WorkflowState
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Callable, Optional, List
+from .state import WorkflowState, AgentTask
 from .supervisor import supervisor
 from .reviewer import reviewer
 from .hitl import hitl_manager
@@ -32,18 +33,19 @@ class OrchestrationEngine:
         provider_override: Optional[str] = None,
         model_override: Optional[str] = None,
         event_callback: Optional[Callable[[dict[str, Any]], None]] = None,
+        parallel_execution: bool = True
     ) -> WorkflowState:
         workflow_id = f"wf-{uuid.uuid4().hex[:8]}"
         workflow_start_entry = append_entry(
             workflow_id, EventType.WORKFLOW_STARTED,
-            {"prompt_length": len(user_prompt), "force_offline": force_offline},
+            {"prompt_length": len(user_prompt), "force_offline": force_offline, "parallel": parallel_execution},
         )
         def emit(event_type: str, **payload: Any) -> None:
             if event_callback:
                 event_callback({"type": event_type, **payload})
 
-        emit("workflow_stage", stage="planning", message="Supervisor is decomposing the goal")
-        # Step 1: Supervisor decomposes prompt into an ordered (sequential) set of subtasks
+        emit("workflow_stage", stage="planning", message="Supervisor is decomposing the goal into specialist subtasks")
+        # Step 1: Supervisor decomposes prompt into specialist subtasks
         state = supervisor.plan_workflow(
             user_prompt=user_prompt, 
             workflow_id=workflow_id,
@@ -57,6 +59,7 @@ class OrchestrationEngine:
             workflow_id=state.workflow_id,
             plan_overview=state.plan_overview,
             subtasks=[task.model_dump() for task in state.subtasks],
+            parallel_enabled=parallel_execution
         )
         for task in state.subtasks:
             safe_description, _ = redactor.sanitize(task.description)
@@ -67,18 +70,16 @@ class OrchestrationEngine:
                 parent_entry_id=workflow_start_entry,
             )
 
-        accumulated_context = f"Project Goal: {user_prompt}\nPlan: {state.plan_overview}\n"
+        base_context = f"Project Goal: {user_prompt}\nPlan: {state.plan_overview}\n"
 
-        # Step 2: Execute specialist nodes sequentially (intercepted by Gateway)
-        for index, task in enumerate(state.subtasks):
+        def _execute_single_task(task_index: int, task: AgentTask, task_context: str):
             agent = SPECIALIST_MAP.get(task.assigned_agent, code_agent)
             task.status = "in_progress"
-            state.current_step = index + 1
             emit(
                 "task_started",
                 workflow_id=state.workflow_id,
                 task_id=task.task_id,
-                task_index=index,
+                task_index=task_index,
                 total_tasks=len(state.subtasks),
                 assigned_agent=task.assigned_agent,
                 description=task.description,
@@ -86,7 +87,7 @@ class OrchestrationEngine:
             
             result = agent.execute(
                 task_description=task.description, 
-                context=accumulated_context,
+                context=task_context,
                 force_offline=force_offline,
                 provider_override=provider_override,
                 model_override=model_override,
@@ -101,7 +102,7 @@ class OrchestrationEngine:
                 "task_completed",
                 workflow_id=state.workflow_id,
                 task_id=task.task_id,
-                task_index=index,
+                task_index=task_index,
                 assigned_agent=task.assigned_agent,
                 complexity_score=task.complexity_score,
                 routed_tier=task.routed_tier,
@@ -112,12 +113,29 @@ class OrchestrationEngine:
                 {"task_id": task.task_id, "assigned_agent": task.assigned_agent,
                  "complexity_score": task.complexity_score, "routed_tier": task.routed_tier},
             )
+            return task_index, task
 
-            accumulated_context += f"\nOutput from {task.assigned_agent} on '{task.description}':\n{task.output}\n"
+        # Step 2: Execute subtasks (Parallelism support)
+        # If parallel execution is enabled and more than 1 task exists, run initial specialists concurrently
+        if parallel_execution and len(state.subtasks) > 1:
+            emit("workflow_stage", stage="executing_parallel", message=f"Executing {len(state.subtasks)} specialist tasks concurrently")
+            with ThreadPoolExecutor(max_workers=min(4, len(state.subtasks))) as executor:
+                futures = [
+                    executor.submit(_execute_single_task, idx, task, base_context)
+                    for idx, task in enumerate(state.subtasks)
+                ]
+                for future in as_completed(futures):
+                    future.result()
+        else:
+            accumulated_context = base_context
+            for index, task in enumerate(state.subtasks):
+                state.current_step = index + 1
+                _, executed_task = _execute_single_task(index, task, accumulated_context)
+                accumulated_context += f"\nOutput from {task.assigned_agent} on '{task.description}':\n{task.output}\n"
 
         # Step 3: Reviewer evaluates confidence and synthesizes final output
         state.status = "review"
-        emit("workflow_stage", stage="review", message="Reviewer is checking the specialist outputs")
+        emit("workflow_stage", stage="review", message="Reviewer is checking quality and synthesizing final output")
         append_entry(state.workflow_id, EventType.REVIEW_STARTED, {"task_count": len(state.subtasks)})
         reviewed_state = reviewer.review_and_synthesize(
             state=state,
@@ -148,10 +166,8 @@ class OrchestrationEngine:
             workflow_id=reviewed_state.workflow_id,
             status=reviewed_state.status,
             confidence_score=reviewed_state.confidence_score,
-        )
-        append_entry(
-            reviewed_state.workflow_id, EventType.WORKFLOW_COMPLETED,
-            {"status": reviewed_state.status, "confidence_score": reviewed_state.confidence_score},
+            final_output=reviewed_state.final_output,
+            telemetry=reviewed_state.telemetry_summary
         )
         return reviewed_state
 
