@@ -5,104 +5,278 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agent Orchestrator & LLM Cost Autopilot</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="css/styles.css?v=2.0.0">
+    <link rel="stylesheet" href="css/styles.css?v=2.1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body class="theme-dark">
     <div class="app-layout">
-        <!-- Main Application Header -->
+        <!-- Main Application Header (Clean & Uncluttered) -->
         <header class="app-header">
             <div class="header-left">
-                <a href="/" class="app-brand">
-                    <svg class="brand-logo" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <a href="#home" class="app-brand" onclick="switchMainSection('home'); return false;">
+                    <svg class="brand-logo" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                     </svg>
                     <span class="brand-title">Agent Orchestrator</span>
-                    <span class="brand-version">v1.5.0</span>
+                    <span class="brand-version">v1.6.0</span>
                 </a>
 
-                <!-- Mode Switcher Tabs -->
+                <!-- Clean Mode Navigation Tabs -->
                 <nav class="mode-nav" aria-label="Application Sections">
-                    <button class="nav-tab active" id="tab-llm-chat" onclick="switchMainSection('chat')">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    <button class="nav-tab active" id="tab-home" onclick="switchMainSection('home')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
                         </svg>
-                        <span>LLM Chat</span>
+                        <span>Workspace</span>
                     </button>
-                    <button class="nav-tab" id="tab-coding-agent" onclick="switchMainSection('coding')">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button class="nav-tab" id="tab-coding" onclick="switchMainSection('coding')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="16 18 22 12 16 6"></polyline>
                             <polyline points="8 6 2 12 8 18"></polyline>
                         </svg>
                         <span>Coding Agent</span>
                     </button>
+                    <button class="nav-tab" id="tab-chat" onclick="switchMainSection('chat')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span>LLM Chat</span>
+                    </button>
                     <button class="nav-tab" id="tab-analytics" onclick="switchMainSection('analytics')">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="20" x2="18" y2="10"></line>
                             <line x1="12" y1="20" x2="12" y2="4"></line>
                             <line x1="6" y1="20" x2="6" y2="14"></line>
                         </svg>
                         <span>Router Analytics</span>
                     </button>
+                    <button class="nav-tab" id="tab-vault" onclick="switchMainSection('vault')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                        </svg>
+                        <span>Prompt Vault</span>
+                    </button>
                 </nav>
             </div>
 
-            <!-- Provider Status Badges -->
-            <div class="header-center">
-                <div class="provider-matrix" id="provider-badges">
-                    <div class="provider-chip" id="chip-gemini" title="Google Gemini Flash & Pro"><span class="status-indicator"></span>Gemini</div>
-                    <div class="provider-chip" id="chip-groq" title="Groq Cloud Fast Models"><span class="status-indicator"></span>Groq</div>
-                    <div class="provider-chip" id="chip-huggingface" title="Hugging Face Serverless Hub"><span class="status-indicator"></span>HuggingFace</div>
-                    <div class="provider-chip" id="chip-openrouter" title="OpenRouter Free Models"><span class="status-indicator"></span>OpenRouter</div>
-                    <div class="provider-chip" id="chip-openai" title="OpenAI Frontier"><span class="status-indicator"></span>OpenAI</div>
-                    <div class="provider-chip" id="chip-ollama" title="Local Offline Models"><span class="status-indicator"></span>Ollama</div>
-                </div>
-            </div>
-
-            <!-- Right Controls & Telemetry -->
+            <!-- Right Controls: Status & System Settings -->
             <div class="header-right">
-                <div class="telemetry-compact">
-                    <div class="metric-item">
-                        <span class="metric-label">Savings</span>
-                        <span class="metric-value text-success" id="stat-saved">$0.0000</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="metric-label">Tokens</span>
-                        <span class="metric-value" id="stat-tokens">0</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="metric-label">Energy</span>
-                        <span class="metric-value text-accent" id="stat-energy">0.0 Wh</span>
-                    </div>
+                <!-- Automatic Quota Rollover Chain Indicator -->
+                <div class="quota-chain-pill" id="quota-chain-badge" title="Automatic Quota Rollover Chain Active across free models">
+                    <span class="status-indicator online"></span>
+                    <span>Quota Rollover Active</span>
                 </div>
 
-                <div class="action-buttons">
-                    <button class="btn btn-secondary btn-sm" onclick="openModal('modal-bridge')" title="Context Bridge for ChatGPT/Gemini/Claude">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-                            <polyline points="16 6 12 2 8 6"></polyline>
-                            <line x1="12" y1="2" x2="12" y2="15"></line>
-                        </svg>
-                        <span>Bridge</span>
-                    </button>
-                    <button class="btn btn-secondary btn-sm" onclick="openModal('modal-rag')" title="Manage Local RAG Knowledge Index">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                        </svg>
-                        <span>RAG</span>
-                    </button>
-                    <button class="btn btn-secondary btn-sm" id="btn-privacy" onclick="togglePrivacyMode()" title="Toggle Offline Privacy Mode">
-                        <span id="privacy-icon">🌐</span>
-                        <span id="privacy-label">Hybrid</span>
-                    </button>
-                </div>
+                <!-- Air-Gapped Privacy Mode Toggle -->
+                <button class="btn btn-secondary btn-sm" id="btn-privacy" onclick="togglePrivacyMode()" title="Toggle Offline Air-Gapped Privacy Mode">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    <span id="privacy-label">Cloud Active</span>
+                </button>
+
+                <!-- System & Providers Settings Button (Hides Clutter) -->
+                <button class="btn btn-secondary btn-sm" onclick="openModal('modal-settings')" title="Manage Providers, API Keys, Telemetry & Caching">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06c.5.5 1.21.67 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.5.5-.67 1.21-.33 1.82V9c.26.604.852 1 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    <span>Settings</span>
+                </button>
             </div>
         </header>
 
-        <!-- SECTION 1: LLM CHAT WORKSPACE -->
-        <main class="workspace-section active" id="section-chat">
+        <!-- ============================================================= -->
+        <!-- SECTION 0: WORKSPACE LAUNCHER (FIRST PAGE / CLEAN HOMEPAGE)   -->
+        <!-- ============================================================= -->
+        <main class="workspace-section active" id="section-home">
+            <div class="launcher-layout">
+                <!-- Hero Section: What would you like to build? -->
+                <div class="launcher-hero">
+                    <h1 class="launcher-title">What would you like to do?</h1>
+                    <p class="launcher-subtitle">
+                        Select a specialized execution mode or run an autonomous multi-agent engineering workflow.
+                    </p>
+                </div>
+
+                <!-- Three Primary Action Cards -->
+                <div class="workspace-choice-grid">
+                    <!-- Choice 1: Coding Agent -->
+                    <div class="choice-card" onclick="switchMainSection('coding')">
+                        <div class="choice-card-header">
+                            <div class="choice-icon-wrap">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="16 18 22 12 16 6"></polyline>
+                                    <polyline points="8 6 2 12 8 18"></polyline>
+                                </svg>
+                            </div>
+                            <span class="choice-badge">Multi-Agent DAG</span>
+                        </div>
+                        <h2 class="choice-title">Coding Agent IDE</h2>
+                        <p class="choice-desc">
+                            Autonomous multi-agent code generation, workspace file tree editor, test execution, and DAG task decomposition.
+                        </p>
+                        <div class="choice-action">
+                            <span class="choice-link-text">Launch Coding Workspace &rarr;</span>
+                        </div>
+                    </div>
+
+                    <!-- Choice 2: LLM Chat & Cost Autopilot -->
+                    <div class="choice-card" onclick="switchMainSection('chat')">
+                        <div class="choice-card-header">
+                            <div class="choice-icon-wrap">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                            </div>
+                            <span class="choice-badge">Zero-Cost Gateway</span>
+                        </div>
+                        <h2 class="choice-title">ChatBot & Cost Autopilot</h2>
+                        <p class="choice-desc">
+                            Dynamic complexity routing across Google Gemini, Groq, and Hugging Face with sub-millisecond ML tier classification.
+                        </p>
+                        <div class="choice-action">
+                            <span class="choice-link-text">Start LLM Conversation &rarr;</span>
+                        </div>
+                    </div>
+
+                    <!-- Choice 3: Complete Privacy Mode -->
+                    <div class="choice-card choice-privacy" onclick="activatePrivacyAndLaunch()">
+                        <div class="choice-card-header">
+                            <div class="choice-icon-wrap">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                </svg>
+                            </div>
+                            <span class="choice-badge badge-privacy">Air-Gapped Local</span>
+                        </div>
+                        <h2 class="choice-title">Complete Privacy Mode</h2>
+                        <p class="choice-desc">
+                            100% offline local execution via Ollama. All cloud API requests are intercepted and blocked. Zero data leaves your computer.
+                        </p>
+                        <div class="choice-action">
+                            <span class="choice-link-text">Activate Offline Mode &rarr;</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Unified Quick-Prompt Box (GitHub Copilot / Agno Style) -->
+                <div class="quick-prompt-container">
+                    <form class="quick-prompt-box" id="quick-prompt-form" onsubmit="handleQuickPromptSubmit(event)">
+                        <textarea
+                            id="quick-prompt-input"
+                            class="quick-prompt-textarea"
+                            rows="2"
+                            placeholder="Ask anything, describe a coding task, or test prompt token compression..."
+                            onkeydown="handleQuickPromptKeyDown(event)"
+                        ></textarea>
+
+                        <div class="quick-prompt-toolbar">
+                            <div class="quick-toolbar-left">
+                                <div class="quick-select-item">
+                                    <label for="quick-mode-select">Target:</label>
+                                    <select id="quick-mode-select" class="select-control-sm">
+                                        <option value="chat">LLM Chat Gateway</option>
+                                        <option value="coding">Coding Agent DAG</option>
+                                        <option value="quota-chain">Automatic Quota Rollover Chain</option>
+                                    </select>
+                                </div>
+
+                                <div class="quick-select-item">
+                                    <label for="quick-compress-select">Compression:</label>
+                                    <select id="quick-compress-select" class="select-control-sm">
+                                        <option value="balanced">Balanced (-50% tokens)</option>
+                                        <option value="mild">Mild (Whitespace & Fluff)</option>
+                                        <option value="aggressive">Aggressive (-80% tokens)</option>
+                                        <option value="none">Off (Raw prompt)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-sm" id="btn-quick-run">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                </svg>
+                                <span>Run Prompt</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Quick Run Result Card (Rendered on submit) -->
+                    <div class="quick-result-card" id="quick-result-card" style="display: none;">
+                        <div class="quick-result-header">
+                            <div class="quick-result-meta">
+                                <span class="tag-meta" id="qr-provider-model">Model</span>
+                                <span class="tag-meta" id="qr-tier">Tier</span>
+                                <span class="tag-meta" id="qr-tokens">Tokens</span>
+                                <span class="tag-meta tag-success" id="qr-savings">Savings</span>
+                            </div>
+                            <button class="btn-tool" onclick="closeQuickResult()">&times;</button>
+                        </div>
+                        <div class="quick-result-body markdown-content" id="qr-text"></div>
+                    </div>
+                </div>
+
+                <!-- On Your Radar / System Telemetry Cards -->
+                <div class="radar-section">
+                    <div class="radar-header-row">
+                        <span class="radar-section-title">ACTIVE ARCHITECTURE & TELEMETRY</span>
+                    </div>
+
+                    <div class="radar-grid">
+                        <!-- Card 1: Automatic Quota Rollover Chain -->
+                        <div class="radar-card">
+                            <div class="radar-card-top">
+                                <span class="radar-label">QUOTA ROLLOVER CHAIN</span>
+                                <span class="radar-status-dot online"></span>
+                            </div>
+                            <div class="radar-val">Groq &rarr; Gemini &rarr; HF &rarr; Ollama</div>
+                            <div class="radar-sub">Automatic rollover on 429 quota exhaustion. Never interrupts coding sessions.</div>
+                        </div>
+
+                        <!-- Card 2: Prompt Vault SQLite Database -->
+                        <div class="radar-card" onclick="switchMainSection('vault')" style="cursor: pointer;">
+                            <div class="radar-card-top">
+                                <span class="radar-label">PROMPT VAULT SQLITE DB</span>
+                                <span class="radar-tag">data/prompt_vault.sqlite3</span>
+                            </div>
+                            <div class="radar-val" id="radar-vault-count">0 Prompts Stored</div>
+                            <div class="radar-sub">Persistent ledger of all prompts, compression savings, and training-ready datasets.</div>
+                        </div>
+
+                        <!-- Card 3: Prompt Token Compressor -->
+                        <div class="radar-card">
+                            <div class="radar-card-top">
+                                <span class="radar-label">TOKEN COMPRESSION SAVINGS</span>
+                                <span class="radar-tag" id="radar-comp-pct">Up to 80%</span>
+                            </div>
+                            <div class="radar-val" id="radar-tokens-saved">0 Tokens Saved</div>
+                            <div class="radar-sub">Lexical condensation & boilerplate pruning before dispatch to models.</div>
+                        </div>
+
+                        <!-- Card 4: Supervised GBDT Classifier -->
+                        <div class="radar-card" onclick="switchMainSection('analytics')" style="cursor: pointer;">
+                            <div class="radar-card-top">
+                                <span class="radar-label">ML ROUTER CLASSIFIER</span>
+                                <span class="radar-tag">XGBoost / GBDT</span>
+                            </div>
+                            <div class="radar-val" id="radar-classifier-acc">92.8% Accuracy</div>
+                            <div class="radar-sub">Trained on 1,252 R2-Bench, synthetic, and live observations with &lt;1ms inference.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ============================================================= -->
+        <!-- SECTION 1: LLM CHAT WORKSPACE                                 -->
+        <!-- ============================================================= -->
+        <main class="workspace-section" id="section-chat">
             <div class="chat-layout">
                 <!-- Chat History Sidebar -->
                 <aside class="chat-sidebar">
@@ -123,7 +297,7 @@
                     <div class="sidebar-footer">
                         <div class="classifier-status-box" id="classifier-info">
                             <div class="status-row">
-                                <span class="status-label">Classifier:</span>
+                                <span class="status-label">Engine:</span>
                                 <span class="status-val" id="ml-status-text">XGBoost / GBDT Active</span>
                             </div>
                             <div class="status-row">
@@ -142,24 +316,20 @@
                             <select id="chat-model-select" class="select-control">
                                 <option value="auto">Auto Cost Autopilot (3-Tier Matrix)</option>
                                 <optgroup label="Free Cloud Tiers">
-                                    <option value="gemini:gemini-2.0-flash">Google Gemini 2.0 Flash</option>
-                                    <option value="gemini:gemini-2.0-flash-lite">Google Gemini 2.0 Flash Lite</option>
-                                    <option value="groq:qwen/qwen3-32b">Groq Qwen3 32B</option>
-                                    <option value="groq:openai/gpt-oss-20b">Groq GPT-OSS 20B</option>
+                                    <option value="gemini:gemini-3.8-flash">Google Gemini 3.8 Flash</option>
+                                    <option value="groq:openai/gpt-oss-20b">Groq GPT-OSS 20B (Tier 1)</option>
+                                    <option value="groq:qwen/qwen3-32b">Groq Qwen3 32B (Tier 2)</option>
                                     <option value="huggingface:Qwen/Qwen2.5-Coder-32B-Instruct">Hugging Face Qwen 2.5 Coder 32B</option>
                                     <option value="huggingface:meta-llama/Llama-3.1-8B-Instruct">Hugging Face Llama 3.1 8B</option>
                                     <option value="openrouter:deepseek/deepseek-r1">OpenRouter DeepSeek R1</option>
-                                    <option value="openrouter:qwen/qwen-2.5-coder-32b-instruct:free">OpenRouter Qwen 2.5 Coder 32B</option>
                                 </optgroup>
                                 <optgroup label="Frontier Commercial">
                                     <option value="openai:gpt-4o-mini">OpenAI GPT-4o Mini</option>
                                     <option value="openai:gpt-4o">OpenAI GPT-4o</option>
-                                    <option value="openai:o3-mini">OpenAI o3-mini (Reasoning)</option>
                                 </optgroup>
                                 <optgroup label="Local Offline (Ollama)">
                                     <option value="ollama:qwen2.5:1.5b">Ollama Qwen 2.5 1.5B (Fast)</option>
                                     <option value="ollama:llama3.1:8b-instruct-q4_K_M">Ollama Llama 3.1 8B (Balanced)</option>
-                                    <option value="ollama:deepseek-r1:8b">Ollama DeepSeek R1 8B</option>
                                 </optgroup>
                             </select>
                         </div>
@@ -174,7 +344,7 @@
                     <!-- Messages Container -->
                     <div class="messages-container" id="chat-messages">
                         <div class="chat-welcome">
-                            <h2>LLM Chat & Intelligent Cost Autopilot</h2>
+                            <h2>LLM Chat & Cost Autopilot</h2>
                             <p>Every query is analyzed for semantic complexity and routed to the most cost-effective model tier.</p>
                             <div class="prompt-suggestions">
                                 <button class="suggestion-chip" onclick="setChatInput('Write a Python function to parse and validate semantic version strings')">Python SemVer Validator</button>
@@ -202,7 +372,9 @@
             </div>
         </main>
 
-        <!-- SECTION 2: CODING AGENT WORKSPACE -->
+        <!-- ============================================================= -->
+        <!-- SECTION 2: CODING AGENT WORKSPACE                             -->
+        <!-- ============================================================= -->
         <main class="workspace-section" id="section-coding">
             <div class="ide-layout">
                 <!-- Left: File Explorer & RAG Tree -->
@@ -221,7 +393,7 @@
                         <div class="empty-hint">Loading files...</div>
                     </div>
 
-                    <!-- Pareto Tradeoff Summary -->
+                    <!-- Pareto Summary -->
                     <div class="panel-header mt-auto">
                         <span class="panel-title">COST / QUALITY PARETO</span>
                     </div>
@@ -302,7 +474,9 @@
             </div>
         </main>
 
-        <!-- SECTION 3: ROUTER ANALYTICS DASHBOARD -->
+        <!-- ============================================================= -->
+        <!-- SECTION 3: ROUTER PERFORMANCE ANALYTICS                       -->
+        <!-- ============================================================= -->
         <main class="workspace-section" id="section-analytics">
             <div class="analytics-layout">
                 <div class="analytics-header-row">
@@ -414,6 +588,108 @@
             </div>
         </main>
 
+        <!-- ============================================================= -->
+        <!-- SECTION 4: PROMPT VAULT SQLITE DATABASE ARCHIVE               -->
+        <!-- ============================================================= -->
+        <main class="workspace-section" id="section-vault">
+            <div class="vault-layout">
+                <div class="vault-header-row">
+                    <div>
+                        <h2 class="vault-title">Prompt Vault SQLite Database</h2>
+                        <p class="vault-desc">All prompt interactions, token compression stats, and routing decisions stored in <code>data/prompt_vault.sqlite3</code>.</p>
+                    </div>
+                    <div class="vault-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="loadPromptVault()" title="Refresh Prompt Vault Data">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M23 4v6h-6"></path>
+                                <path d="M1 20v-6h6"></path>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                            <span>Refresh</span>
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="exportVaultDataset()" title="Export JSONL dataset for fine-tuning or ML training">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            <span>Export Dataset</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Vault Telemetry Cards -->
+                <div class="analytics-summary-row" id="vault-summary-cards">
+                    <div class="summary-card">
+                        <span class="card-label">Total Prompts</span>
+                        <span class="card-val" id="vault-total-count">0</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="card-label">Original Tokens</span>
+                        <span class="card-val" id="vault-orig-tokens">0</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="card-label">Compressed Tokens</span>
+                        <span class="card-val" id="vault-comp-tokens">0</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="card-label">Tokens Saved</span>
+                        <span class="card-val text-success" id="vault-saved-tokens">0</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="card-label">Avg Compression</span>
+                        <span class="card-val" id="vault-avg-ratio">1.0</span>
+                    </div>
+                    <div class="summary-card">
+                        <span class="card-label">Training Ready</span>
+                        <span class="card-val" id="vault-train-count">0</span>
+                    </div>
+                </div>
+
+                <!-- Filters & Search -->
+                <div class="vault-filters-bar">
+                    <div class="input-inline" style="flex: 1;">
+                        <input type="text" id="vault-search-input" class="input-control" placeholder="Search stored prompts or responses..." onkeyup="debounceVaultSearch()">
+                    </div>
+                    <select id="vault-tier-filter" class="select-control" onchange="loadPromptVault()">
+                        <option value="">All Tiers</option>
+                        <option value="Tier 1">Tier 1 (Fast / Light)</option>
+                        <option value="Tier 2">Tier 2 (Balanced)</option>
+                        <option value="Tier 3">Tier 3 (Frontier)</option>
+                        <option value="Quota Rollover">Quota Rollover Chain</option>
+                        <option value="Cache">Exact Cache Match</option>
+                    </select>
+                </div>
+
+                <!-- Prompts Table -->
+                <div class="analytics-panel">
+                    <div class="panel-header">
+                        <span class="panel-title">RECORDED PROMPT TRANSACTIONS (SQLITE)</span>
+                    </div>
+                    <div class="analytics-table-wrap">
+                        <table class="analytics-table" id="vault-prompts-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Created</th>
+                                    <th>Prompt</th>
+                                    <th>Compressed</th>
+                                    <th>Tier / Route</th>
+                                    <th>Model & Provider</th>
+                                    <th>Tokens (In / Out)</th>
+                                    <th>Latency</th>
+                                    <th>Rating</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vault-prompts-tbody">
+                                <tr><td colspan="9" class="empty-hint">No stored prompts yet. Send queries to accumulate training samples.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+
         <!-- Footer -->
         <footer class="app-footer">
             <div class="footer-left">
@@ -429,6 +705,119 @@
                 <a href="https://github.com/PrathameshPaigude/LLM-Cost-Autopilot-Agent-Orchestrator" target="_blank" rel="noopener">GitHub Repository</a>
             </div>
         </footer>
+    </div>
+
+    <!-- ============================================================= -->
+    <!-- MODAL 0: SYSTEM & PROVIDER SETTINGS (UNCLUTTERED DRAWER)      -->
+    <!-- ============================================================= -->
+    <div class="modal-overlay" id="modal-settings" style="display: none;">
+        <div class="modal-container modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title">System & Provider Configuration</h3>
+                <button class="modal-close" onclick="closeModal('modal-settings')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-group">
+                    <h4 class="settings-group-title">Active AI Model Providers</h4>
+                    <p class="settings-desc">Provider health and dynamic connection matrix. All providers support free-tier limits with auto-failover.</p>
+                    
+                    <div class="provider-grid-cards" id="settings-provider-cards">
+                        <div class="provider-card" id="card-gemini">
+                            <div class="provider-card-top">
+                                <span class="provider-card-name">Google Gemini</span>
+                                <span class="status-indicator" id="ind-gemini"></span>
+                            </div>
+                            <div class="provider-card-detail">Primary: gemini-3.8-flash (15 RPM free)</div>
+                        </div>
+
+                        <div class="provider-card" id="card-groq">
+                            <div class="provider-card-top">
+                                <span class="provider-card-name">Groq Cloud</span>
+                                <span class="status-indicator" id="ind-groq"></span>
+                            </div>
+                            <div class="provider-card-detail">Primary: openai/gpt-oss-20b (Ultra-fast LPU)</div>
+                        </div>
+
+                        <div class="provider-card" id="card-huggingface">
+                            <div class="provider-card-top">
+                                <span class="provider-card-name">Hugging Face</span>
+                                <span class="status-indicator" id="ind-huggingface"></span>
+                            </div>
+                            <div class="provider-card-detail">Serverless Hub: Qwen 2.5 Coder 32B</div>
+                        </div>
+
+                        <div class="provider-card" id="card-openrouter">
+                            <div class="provider-card-top">
+                                <span class="provider-card-name">OpenRouter</span>
+                                <span class="status-indicator" id="ind-openrouter"></span>
+                            </div>
+                            <div class="provider-card-detail">Free pool: DeepSeek R1 & Qwen Coder</div>
+                        </div>
+
+                        <div class="provider-card" id="card-openai">
+                            <div class="provider-card-top">
+                                <span class="provider-card-name">OpenAI</span>
+                                <span class="status-indicator" id="ind-openai"></span>
+                            </div>
+                            <div class="provider-card-detail">Frontier: gpt-4o-mini & gpt-4o</div>
+                        </div>
+
+                        <div class="provider-card" id="card-ollama">
+                            <div class="provider-card-top">
+                                <span class="provider-card-name">Local Ollama</span>
+                                <span class="status-indicator online"></span>
+                            </div>
+                            <div class="provider-card-detail">Air-Gapped: qwen2.5:1.5b & llama3.1:8b</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-group mt-3">
+                    <h4 class="settings-group-title">Session Telemetry & Estimated Savings</h4>
+                    <div class="settings-telemetry-row">
+                        <div class="stat-card">
+                            <span class="card-label">Total Cost Saved</span>
+                            <span class="card-val text-success" id="settings-stat-saved">$0.0000</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="card-label">Total Tokens</span>
+                            <span class="card-val" id="settings-stat-tokens">0</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="card-label">Compute Energy</span>
+                            <span class="card-val text-accent" id="settings-stat-energy">0.0 J</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-group mt-3">
+                    <h4 class="settings-group-title">Subsystem Utilities</h4>
+                    <div class="settings-actions-row">
+                        <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-settings'); openModal('modal-bridge');">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                                <polyline points="16 6 12 2 8 6"></polyline>
+                                <line x1="12" y1="2" x2="12" y2="15"></line>
+                            </svg>
+                            <span>Open Context Bridge</span>
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-settings'); openModal('modal-rag');">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                            </svg>
+                            <span>Manage RAG Index</span>
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="clearCache()">
+                            <span>Clear Exact Cache</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModal('modal-settings')">Done</button>
+            </div>
+        </div>
     </div>
 
     <!-- MODAL 1: CONTEXT BRIDGE -->
@@ -525,7 +914,7 @@
                 <p>All prompts routed through the Cost Autopilot Gateway pass through a local regex and entity sanitizer to redact sensitive identifiers (emails, phone numbers, API tokens) prior to any external model dispatch.</p>
 
                 <h4>4. Data Retention & Caching</h4>
-                <p>Exact-match cache entries and evidence ledgers are stored in local memory and local filesystem records. No third-party analytics scripts or external tracking pixels are used.</p>
+                <p>Exact-match cache entries, Prompt Vault records, and evidence ledgers are stored in local SQLite records on your machine. No third-party tracking pixels or telemetry scripts are used.</p>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-primary" onclick="closeModal('modal-privacy')">I Understand</button>
@@ -559,6 +948,6 @@
         </div>
     </div>
 
-    <script src="js/app.js?v=2.0.0"></script>
+    <script src="js/app.js?v=2.1.0"></script>
 </body>
 </html>

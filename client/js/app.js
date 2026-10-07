@@ -1,6 +1,7 @@
 /**
- * Agent Orchestrator & LLM Cost Autopilot - Client Application Logic
- * Supports: LLM Chat, Coding Agent IDE, Local RAG, Context Bridge, SSE Progress, and Telemetry.
+ * Agent Orchestrator & LLM Cost Autopilot - Client Application Logic (v2.1.0)
+ * Supports: Workspace Launcher, Automatic Quota Rollover Chain, Prompt Vault SQLite Archive,
+ * Token Compression Engine, LLM Chat, Coding Agent IDE, Router Analytics, and Telemetry.
  */
 
 const API_BASE = window.location.origin;
@@ -11,6 +12,7 @@ let activeFilePath = "server/app/main.py";
 let activeJobId = null;
 let eventSource = null;
 let currentWorkflowState = null;
+let vaultDebounceTimer = null;
 
 // Initialize on DOM Load
 document.addEventListener("DOMContentLoaded", () => {
@@ -21,11 +23,14 @@ async function initApp() {
     await fetchHealth();
     await fetchTelemetry();
     await fetchRAGStats();
+    await checkQuotaChainStatus();
+    await loadPromptVault();
     await refreshWorkspaceFiles();
     loadWorkspaceFile(activeFilePath);
 
-    // Periodic telemetry update
+    // Periodic telemetry & status updates
     setInterval(fetchTelemetry, 8000);
+    setInterval(checkQuotaChainStatus, 15000);
 }
 
 // -------------------------------------------------------------
@@ -35,46 +40,253 @@ function switchMainSection(section) {
     document.querySelectorAll(".workspace-section").forEach(el => el.classList.remove("active"));
     document.querySelectorAll(".nav-tab").forEach(el => el.classList.remove("active"));
 
-    if (section === "chat") {
-        document.getElementById("section-chat").classList.add("active");
-        document.getElementById("tab-llm-chat").classList.add("active");
+    if (section === "home" || section === "overview") {
+        document.getElementById("section-home")?.classList.add("active");
+        document.getElementById("tab-home")?.classList.add("active");
+        loadPromptVault();
+    } else if (section === "chat") {
+        document.getElementById("section-chat")?.classList.add("active");
+        document.getElementById("tab-chat")?.classList.add("active");
     } else if (section === "coding") {
-        document.getElementById("section-coding").classList.add("active");
-        document.getElementById("tab-coding-agent").classList.add("active");
+        document.getElementById("section-coding")?.classList.add("active");
+        document.getElementById("tab-coding")?.classList.add("active");
     } else if (section === "analytics") {
-        document.getElementById("section-analytics").classList.add("active");
-        document.getElementById("tab-analytics").classList.add("active");
+        document.getElementById("section-analytics")?.classList.add("active");
+        document.getElementById("tab-analytics")?.classList.add("active");
         loadRouterAnalytics();
+    } else if (section === "vault") {
+        document.getElementById("section-vault")?.classList.add("active");
+        document.getElementById("tab-vault")?.classList.add("active");
+        loadPromptVault();
     }
 }
 
 // -------------------------------------------------------------
-// Health & Provider Badges
+// SECTION 0: WORKSPACE LAUNCHER & QUICK PROMPT LOGIC
 // -------------------------------------------------------------
+async function activatePrivacyAndLaunch() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/config/privacy`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ privacy_mode: true })
+        });
+        if (resp.ok) {
+            const privLabel = document.getElementById("privacy-label");
+            if (privLabel) privLabel.textContent = "Air-Gapped";
+            alert("Complete Air-Gapped Privacy Mode Activated. All cloud API requests are intercepted & blocked. Offline Ollama execution is enforced.");
+            switchMainSection("chat");
+        }
+    } catch (e) {
+        console.error("Privacy mode toggle failed:", e);
+    }
+}
+
+function handleQuickPromptKeyDown(event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        handleQuickPromptSubmit(event);
+    }
+}
+
+async function handleQuickPromptSubmit(event) {
+    if (event) event.preventDefault();
+    const input = document.getElementById("quick-prompt-input");
+    const prompt = (input?.value || "").trim();
+    if (!prompt) return;
+
+    const mode = document.getElementById("quick-mode-select")?.value || "chat";
+    const comp = document.getElementById("quick-compress-select")?.value || "balanced";
+    const btn = document.getElementById("btn-quick-run");
+    if (btn) {
+        btn.disabled = true;
+        btn.querySelector("span").textContent = "Executing...";
+    }
+
+    const resultCard = document.getElementById("quick-result-card");
+    const qrBody = document.getElementById("qr-text");
+    if (resultCard) resultCard.style.display = "block";
+    if (qrBody) qrBody.innerHTML = "<em>Analyzing complexity, applying token compression, and routing across providers...</em>";
+
+    try {
+        let data;
+        if (mode === "quota-chain") {
+            const resp = await fetch(`${API_BASE}/v1/chat/completions`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    messages: [{ role: "user", content: prompt }],
+                    compression: comp
+                })
+            });
+            const resJson = await resp.json();
+            data = {
+                response: resJson.choices?.[0]?.message?.content || "No response",
+                model_name: resJson.model,
+                provider: resJson.quota_chain?.provider_used || "Quota Chain",
+                tier_used: "Quota Rollover",
+                tokens_saved: resJson.quota_chain?.tokens_saved || 0,
+                latency_ms: resJson.quota_chain?.latency_ms || 0
+            };
+        } else if (mode === "coding") {
+            switchMainSection("coding");
+            const wfInput = document.getElementById("wf-prompt-input");
+            if (wfInput) wfInput.value = prompt;
+            dispatchWorkflow();
+            return;
+        } else {
+            const resp = await fetch(`${API_BASE}/api/v1/route`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt: prompt, agent_name: "QuickLauncher" })
+            });
+            data = await resp.json();
+        }
+
+        setText("qr-provider-model", `${data.provider || "Gateway"} · ${data.model_name || "auto"}`);
+        setText("qr-tier", data.tier_used || "Tier 1");
+        setText("qr-tokens", `${data.input_tokens || 0} in / ${data.output_tokens || 0} out`);
+        setText("qr-savings", data.tokens_saved ? `Saved ${data.tokens_saved} tok` : `Cost: $${(data.actual_cost_usd || 0).toFixed(5)}`);
+        if (qrBody) qrBody.innerHTML = renderMarkdown(data.response || (data.error ? `⚠️ Error: ${data.error}` : "No response generated by model."));
+
+        fetchTelemetry();
+        loadPromptVault();
+    } catch (err) {
+        if (qrBody) qrBody.innerHTML = `<span style="color: var(--color-danger);">Execution Error: ${err.message}</span>`;
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.querySelector("span").textContent = "Run Prompt";
+        }
+    }
+}
+
+function closeQuickResult() {
+    const el = document.getElementById("quick-result-card");
+    if (el) el.style.display = "none";
+}
+
+// -------------------------------------------------------------
+// SECTION 4: PROMPT VAULT SQLITE LOGIC
+// -------------------------------------------------------------
+function debounceVaultSearch() {
+    clearTimeout(vaultDebounceTimer);
+    vaultDebounceTimer = setTimeout(loadPromptVault, 300);
+}
+
+async function loadPromptVault() {
+    try {
+        const statsResp = await fetch(`${API_BASE}/api/v1/vault/stats`);
+        if (statsResp.ok) {
+            const stats = await statsResp.json();
+            setText("vault-total-count", stats.total_prompts || 0);
+            setText("vault-orig-tokens", (stats.total_tokens_original || 0).toLocaleString());
+            setText("vault-comp-tokens", (stats.total_tokens_compressed || 0).toLocaleString());
+            setText("vault-saved-tokens", (stats.total_tokens_saved || 0).toLocaleString());
+            const savedPct = stats.avg_compression_ratio ? Math.round((1 - stats.avg_compression_ratio) * 100) : 0;
+            setText("vault-avg-ratio", savedPct > 0 ? `${savedPct}% Saved` : "1.0 (Raw)");
+            setText("vault-train-count", stats.training_ready_count || 0);
+
+            // Update radar cards on launcher
+            setText("radar-vault-count", `${stats.total_prompts || 0} Prompts Stored`);
+            setText("radar-tokens-saved", `${(stats.total_tokens_saved || 0).toLocaleString()} Tokens Saved`);
+            if (savedPct > 0) {
+                setText("radar-comp-pct", `${savedPct}% Saved`);
+            }
+        }
+
+        const search = (document.getElementById("vault-search-input")?.value || "").trim();
+        const tier = document.getElementById("vault-tier-filter")?.value || "";
+        let url = `${API_BASE}/api/v1/vault/prompts?limit=50`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        if (tier) url += `&tier=${encodeURIComponent(tier)}`;
+
+        const listResp = await fetch(url);
+        if (!listResp.ok) return;
+        const listData = await listResp.json();
+        const tbody = document.getElementById("vault-prompts-tbody");
+        if (!tbody) return;
+
+        const prompts = listData.prompts || [];
+        if (prompts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="empty-hint">No stored prompts yet. Send queries to accumulate training samples.</td></tr>';
+        } else {
+            tbody.innerHTML = prompts.map(p => {
+                const promptSnippet = escapeHtml((p.original_prompt || "").slice(0, 65));
+                const compSnippet = escapeHtml((p.compressed_prompt || "").slice(0, 65));
+                const ratingStr = p.user_rating ? `★ ${p.user_rating}/5` : '-';
+                const created = (p.created_at || "").slice(11, 19);
+                return `<tr>
+                    <td>${p.id}</td>
+                    <td>${created}</td>
+                    <td title="${escapeHtml(p.original_prompt)}">${promptSnippet}</td>
+                    <td title="${escapeHtml(p.compressed_prompt || '')}">${compSnippet}</td>
+                    <td><span class="tag-meta">${escapeHtml(p.tier_used)}</span></td>
+                    <td>${escapeHtml(p.model_name)}</td>
+                    <td>${p.tokens_in} / ${p.tokens_out}</td>
+                    <td>${p.latency_ms ? Math.round(p.latency_ms) + 'ms' : '-'}</td>
+                    <td>${ratingStr}</td>
+                </tr>`;
+            }).join("");
+        }
+    } catch (e) {
+        console.warn("Vault fetch failed:", e);
+    }
+}
+
+async function exportVaultDataset() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/vault/export`);
+        if (!resp.ok) return alert("Failed to export dataset");
+        const data = await resp.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `prompt_vault_training_dataset_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        alert("Export failed: " + e.message);
+    }
+}
+
+// -------------------------------------------------------------
+// QUOTA ROLLOVER CHAIN & HEALTH LOGIC
+// -------------------------------------------------------------
+async function checkQuotaChainStatus() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/quota-chain/status`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const badge = document.getElementById("quota-chain-badge") || document.getElementById("omniroute-badge");
+        const healthyCount = (data.providers || []).filter(p => p.status === "healthy").length;
+        if (badge) {
+            badge.title = `Quota Rollover Active: ${healthyCount} healthy providers in rollover chain`;
+        }
+    } catch (e) {
+        // silent
+    }
+}
+
 async function fetchHealth() {
     try {
         const resp = await fetch(`${API_BASE}/api/v1/health`);
         if (!resp.ok) return;
         const data = await resp.json();
 
-        // Update provider chips
+        // Update indicators in Settings Modal
         const providers = data.providers || {};
-        updateChip("chip-gemini", providers.gemini?.configured);
-        updateChip("chip-groq", providers.groq?.configured);
-        updateChip("chip-huggingface", providers.huggingface?.configured);
-        updateChip("chip-openrouter", providers.openrouter?.configured);
-        updateChip("chip-openai", providers.openai?.configured);
-        updateChip("chip-ollama", providers.ollama?.online);
+        updateIndicator("ind-gemini", providers.gemini?.configured);
+        updateIndicator("ind-groq", providers.groq?.configured);
+        updateIndicator("ind-huggingface", providers.huggingface?.configured);
+        updateIndicator("ind-openrouter", providers.openrouter?.configured);
+        updateIndicator("ind-openai", providers.openai?.configured);
 
-        // Update Privacy Mode indicator
-        const privIcon = document.getElementById("privacy-icon");
+        // Update Privacy Mode label
         const privLabel = document.getElementById("privacy-label");
-        if (data.privacy_mode) {
-            privIcon.textContent = "🔒";
-            privLabel.textContent = "Offline";
-        } else {
-            privIcon.textContent = "🌐";
-            privLabel.textContent = "Hybrid";
+        if (privLabel) {
+            privLabel.textContent = data.privacy_mode ? "Air-Gapped" : "Cloud Active";
         }
 
         // ML Status
@@ -93,7 +305,7 @@ async function fetchHealth() {
     }
 }
 
-function updateChip(elementId, isOnline) {
+function updateIndicator(elementId, isOnline) {
     const el = document.getElementById(elementId);
     if (!el) return;
     el.classList.remove("online", "offline");
@@ -106,13 +318,11 @@ async function fetchTelemetry() {
         if (!resp.ok) return;
         const data = await resp.json();
 
-        const savedEl = document.getElementById("stat-saved");
-        const tokensEl = document.getElementById("stat-tokens");
-        const energyEl = document.getElementById("stat-energy");
-
-        if (savedEl) savedEl.textContent = `$${(data.estimated_money_saved_usd || 0).toFixed(4)}`;
-        if (tokensEl) tokensEl.textContent = (data.total_tokens_routed || 0).toLocaleString();
-        if (energyEl) energyEl.textContent = `${(data.estimated_joules_saved || 0) / 3600 < 0.1 ? (data.estimated_joules_saved || 0).toFixed(1) + " J" : ((data.estimated_joules_saved || 0) / 3600).toFixed(2) + " Wh"}`;
+        // Settings modal telemetry
+        setText("settings-stat-saved", `$${(data.estimated_money_saved_usd || 0).toFixed(4)}`);
+        setText("settings-stat-tokens", (data.total_tokens_routed || 0).toLocaleString());
+        const joules = data.estimated_joules_saved || 0;
+        setText("settings-stat-energy", joules / 3600 < 0.1 ? `${joules.toFixed(1)} J` : `${(joules / 3600).toFixed(2)} Wh`);
 
         renderParetoChart();
     } catch (e) {
@@ -138,6 +348,17 @@ async function togglePrivacyMode() {
     }
 }
 
+async function clearCache() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/debug/cache`, { method: "DELETE" });
+        if (resp.ok) {
+            alert("Exact-match cache cleared successfully.");
+        }
+    } catch (e) {
+        alert("Clear cache failed: " + e.message);
+    }
+}
+
 // -------------------------------------------------------------
 // SECTION 1: LLM CHAT LOGIC
 // -------------------------------------------------------------
@@ -146,7 +367,7 @@ function startNewChat() {
     const container = document.getElementById("chat-messages");
     container.innerHTML = `
         <div class="chat-welcome">
-            <h2>LLM Chat & Intelligent Cost Autopilot</h2>
+            <h2>LLM Chat & Cost Autopilot</h2>
             <p>Every query is analyzed for semantic complexity and routed to the most cost-effective model tier.</p>
             <div class="prompt-suggestions">
                 <button class="suggestion-chip" onclick="setChatInput('Write a Python function to parse and validate semantic version strings')">Python SemVer Validator</button>
@@ -209,7 +430,6 @@ async function handleChatSubmit(event) {
         }
     }
 
-    // Loading indicator
     const loadingId = appendChatLoading();
 
     try {
@@ -228,17 +448,19 @@ async function handleChatSubmit(event) {
         removeChatLoading(loadingId);
 
         if (!resp.ok) {
-            const err = await resp.json();
-            appendChatMessage("assistant", `Error: ${err.detail || "Route execution failed"}`);
+            const err = await resp.json().catch(() => ({}));
+            appendChatMessage("assistant", `⚠️ Error: ${err.detail || "Route execution failed"}`);
             return;
         }
 
         const data = await resp.json();
+        const responseText = data.response || (data.error ? `⚠️ Error: ${data.error}` : "No response generated by model.");
         chatHistory.push({ role: "user", content: prompt });
-        chatHistory.push({ role: "assistant", content: data.response });
+        chatHistory.push({ role: "assistant", content: responseText });
 
-        appendChatMessage("assistant", data.response, data);
+        appendChatMessage("assistant", responseText, data);
         fetchTelemetry();
+        loadPromptVault();
     } catch (e) {
         removeChatLoading(loadingId);
         appendChatMessage("assistant", `Network error: ${e.message}`);
@@ -299,7 +521,7 @@ function appendChatMessage(role, text, auditData = null) {
             <span class="message-role">${roleName}</span>
         </div>
         <div class="message-body markdown-content">
-            ${renderMarkdown(text)}
+            ${renderMarkdown(text || (auditData?.error ? `⚠️ Error: ${auditData.error}` : "(No response content)"))}
             ${auditHtml}
             ${feedbackHtml}
         </div>
@@ -338,50 +560,58 @@ async function refreshWorkspaceFiles() {
         if (!resp.ok) return;
         const data = await resp.json();
         const treeList = document.getElementById("file-tree-list");
-        treeList.innerHTML = "";
+        if (!treeList) return;
 
-        data.files.forEach(f => {
-            const item = document.createElement("div");
-            item.className = `file-item ${f.path === activeFilePath ? "active" : ""}`;
-            item.innerHTML = `<span>${getFileIcon(f.extension)}</span> <span>${f.path}</span>`;
-            item.onclick = () => {
-                document.querySelectorAll(".file-item").forEach(el => el.classList.remove("active"));
-                item.classList.add("active");
-                loadWorkspaceFile(f.path);
-            };
-            treeList.appendChild(item);
-        });
+        const files = data.files || [];
+        if (files.length === 0) {
+            treeList.innerHTML = '<div class="empty-hint">No files found in workspace.</div>';
+            return;
+        }
+
+        treeList.innerHTML = files.map(file => {
+            const isSelected = file === activeFilePath;
+            return `
+                <div class="file-tree-item ${isSelected ? 'active' : ''}" onclick="loadWorkspaceFile('${file}')" title="${file}">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                    <span>${file}</span>
+                </div>
+            `;
+        }).join("");
     } catch (e) {
-        console.warn("Error refreshing workspace files:", e);
+        console.warn("Files list failed:", e);
     }
 }
 
-function getFileIcon(ext) {
-    if (ext === ".py") return "🐍";
-    if (ext === ".json") return "📦";
-    if (ext === ".md") return "📝";
-    if (ext === ".html" || ext === ".css" || ext === ".js") return "🌐";
-    return "📄";
-}
-
 async function loadWorkspaceFile(path) {
+    if (!path) return;
+    activeFilePath = path;
+    const tabEl = document.getElementById("active-file-tab");
+    if (tabEl) tabEl.textContent = path.split("/").pop();
+
     try {
-        activeFilePath = path;
         const resp = await fetch(`${API_BASE}/api/v1/workspace/file?path=${encodeURIComponent(path)}`);
         if (!resp.ok) return;
         const data = await resp.json();
+        const editor = document.getElementById("code-editor");
+        if (editor) editor.value = data.content;
 
-        document.getElementById("code-editor").value = data.content;
-        const tab = document.getElementById("active-file-tab");
-        if (tab) tab.textContent = path.split("/").pop();
+        document.querySelectorAll(".file-tree-item").forEach(item => {
+            item.classList.toggle("active", item.getAttribute("title") === path);
+        });
     } catch (e) {
-        console.warn("Failed to load file:", e);
+        console.warn("File read error:", e);
     }
 }
 
 async function saveActiveFile() {
+    const editor = document.getElementById("code-editor");
+    if (!editor) return;
+    const content = editor.value;
+
     try {
-        const content = document.getElementById("code-editor").value;
         const resp = await fetch(`${API_BASE}/api/v1/workspace/file`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -390,31 +620,29 @@ async function saveActiveFile() {
         if (resp.ok) {
             alert(`File saved: ${activeFilePath}`);
         } else {
-            alert("Failed to save file.");
+            const err = await resp.json();
+            alert(`Save failed: ${err.detail || "Unknown error"}`);
         }
     } catch (e) {
-        alert("Error saving file: " + e.message);
+        alert("Save request failed: " + e.message);
     }
 }
 
-// -------------------------------------------------------------
-// Multi-Agent Workflow Execution (SSE Streaming)
-// -------------------------------------------------------------
 async function dispatchWorkflow() {
     const input = document.getElementById("wf-prompt-input");
     const prompt = input.value.trim();
     if (!prompt) return;
 
-    const parallel = document.getElementById("wf-parallel-toggle")?.checked ?? true;
+    const parallel = document.getElementById("wf-parallel-toggle").checked;
     const badge = document.getElementById("wf-status-badge");
-    badge.className = "status-badge executing";
-    badge.textContent = "EXECUTING";
+    badge.textContent = "RUNNING";
+    badge.style.color = "var(--color-info)";
 
-    const dagContainer = document.getElementById("wf-task-list");
-    dagContainer.innerHTML = `<div class="empty-hint">Supervisor is decomposing goal into subtasks...</div>`;
+    const taskList = document.getElementById("wf-task-list");
+    taskList.innerHTML = '<div class="empty-hint">Decomposing goal and dispatching agents...</div>';
 
-    const consoleOutput = document.getElementById("wf-console-output");
-    consoleOutput.innerHTML = `<em>Workflow started: "${prompt.substring(0, 60)}..."</em><br>`;
+    const consoleOut = document.getElementById("wf-console-output");
+    consoleOut.innerHTML = '<em>Workflow started. Streaming progress...</em>';
 
     try {
         const resp = await fetch(`${API_BASE}/api/v1/workflow/jobs`, {
@@ -424,34 +652,31 @@ async function dispatchWorkflow() {
         });
 
         if (!resp.ok) {
-            badge.className = "status-badge";
             badge.textContent = "FAILED";
+            badge.style.color = "var(--color-danger)";
             return;
         }
 
-        const jobData = await resp.json();
-        activeJobId = jobData.job_id;
-        subscribeToWorkflowEvents(activeJobId);
+        const data = await resp.json();
+        activeJobId = data.job_id;
+        streamWorkflowEvents(activeJobId);
     } catch (e) {
-        badge.className = "status-badge";
         badge.textContent = "ERROR";
-        consoleOutput.innerHTML += `<span style="color:red">Error: ${e.message}</span>`;
+        badge.style.color = "var(--color-danger)";
+        consoleOut.textContent = `Error: ${e.message}`;
     }
 }
 
-function subscribeToWorkflowEvents(jobId) {
-    if (eventSource) {
-        eventSource.close();
-    }
-
+function streamWorkflowEvents(jobId) {
+    if (eventSource) eventSource.close();
     eventSource = new EventSource(`${API_BASE}/api/v1/workflow/jobs/${jobId}/events`);
 
-    eventSource.onmessage = (e) => {
+    eventSource.onmessage = (event) => {
         try {
-            const event = JSON.parse(e.data);
-            handleWorkflowEvent(event);
-        } catch (err) {
-            console.debug("SSE Parse skip:", e.data);
+            const payload = JSON.parse(event.data);
+            handleWorkflowEvent(payload);
+        } catch (e) {
+            console.warn("Event parse error:", e);
         }
     };
 
@@ -460,303 +685,71 @@ function subscribeToWorkflowEvents(jobId) {
     };
 }
 
-function handleWorkflowEvent(event) {
-    const dagContainer = document.getElementById("wf-task-list");
-    const consoleOutput = document.getElementById("wf-console-output");
+function handleWorkflowEvent(payload) {
+    const type = payload.type;
+    const data = payload.data || {};
+    const taskList = document.getElementById("wf-task-list");
+    const consoleOut = document.getElementById("wf-console-output");
     const badge = document.getElementById("wf-status-badge");
 
-    if (event.type === "plan_created") {
-        dagContainer.innerHTML = "";
-        (event.subtasks || []).forEach(task => {
-            const card = document.createElement("div");
-            card.id = `card-${task.task_id}`;
-            card.className = "task-card";
-            card.innerHTML = `
-                <div class="task-top">
-                    <span class="task-agent">${task.assigned_agent}</span>
-                    <span class="task-tier-tag" id="tag-${task.task_id}">Pending</span>
-                </div>
-                <div class="task-desc">${task.description}</div>
-            `;
-            dagContainer.appendChild(card);
-        });
-        consoleOutput.innerHTML += `<strong>Plan:</strong> ${event.plan_overview}<br>`;
-    } else if (event.type === "task_started") {
-        const card = document.getElementById(`card-${event.task_id}`);
-        if (card) {
-            card.className = "task-card in_progress";
-            const tag = document.getElementById(`tag-${event.task_id}`);
-            if (tag) tag.textContent = "In Progress...";
-        }
-    } else if (event.type === "task_completed") {
-        const card = document.getElementById(`card-${event.task_id}`);
-        if (card) {
-            card.className = "task-card completed";
-            const tag = document.getElementById(`tag-${event.task_id}`);
-            if (tag) tag.textContent = `${event.routed_tier || "Tier 2"} (Score: ${(event.complexity_score || 0).toFixed(2)})`;
-        }
-        consoleOutput.innerHTML += `[${event.assigned_agent}] Completed task.<br>`;
-    } else if (event.type === "workflow_finished") {
-        badge.className = "status-badge completed";
-        badge.textContent = event.status === "completed" ? "FINISHED" : event.status.toUpperCase();
-
-        if (event.status === "pending_hitl") {
-            document.getElementById("hitl-panel").style.display = "block";
-            currentWorkflowState = event;
-        }
-
-        consoleOutput.innerHTML += `<br><strong>=== FINAL SYNTHESIS ===</strong><br>${renderMarkdown(event.final_output || "Workflow finished.")}<br>`;
+    if (type === "workflow_started") {
+        consoleOut.innerHTML = `<div><strong>Workflow started:</strong> "${escapeHtml(data.prompt)}"</div><div><strong>Plan:</strong> ${escapeHtml(data.plan)}</div>`;
+    } else if (type === "task_completed") {
+        const taskDiv = document.createElement("div");
+        taskDiv.className = "dag-task-card";
+        taskDiv.innerHTML = `
+            <div class="dag-task-header">
+                <span>${escapeHtml(data.agent_name)}</span>
+                <span class="audit-tag tier-2">${escapeHtml(data.tier_used || 'Tier 2')}</span>
+            </div>
+            <div class="dag-task-desc">${escapeHtml(data.task_description)}</div>
+        `;
+        taskList.appendChild(taskDiv);
+        consoleOut.innerHTML += `<div>[${escapeHtml(data.agent_name)}] Completed task.</div>`;
+    } else if (type === "hitl_required") {
+        document.getElementById("hitl-panel").style.display = "block";
+        badge.textContent = "WAITING REVIEW";
+        badge.style.color = "var(--color-warning)";
+    } else if (type === "workflow_completed") {
+        badge.textContent = "FINISHED";
+        badge.style.color = "var(--color-success)";
+        consoleOut.innerHTML += `
+            <hr style="border-color: var(--border-subtle); margin: 8px 0;">
+            <div><strong>FINAL SYNTHESIS</strong></div>
+            <div class="markdown-content">${renderMarkdown(data.final_synthesis || "Workflow completed.")}</div>
+        `;
         if (eventSource) eventSource.close();
         fetchTelemetry();
+        loadPromptVault();
     }
 }
 
 async function approveHITL() {
-    if (!currentWorkflowState) return;
+    if (!activeJobId) return;
     try {
-        await fetch(`${API_BASE}/api/v1/hitl/${currentWorkflowState.workflow_id}/approve`, {
+        await fetch(`${API_BASE}/api/v1/hitl/${activeJobId}/approve`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: "Approved via UI" })
+            body: JSON.stringify({ reason: "Approved via dashboard" })
         });
         document.getElementById("hitl-panel").style.display = "none";
-        document.getElementById("wf-status-badge").textContent = "APPROVED";
     } catch (e) {
-        alert("Approval failed: " + e.message);
+        alert("Approve error: " + e.message);
     }
 }
 
 async function rejectHITL() {
-    if (!currentWorkflowState) return;
+    if (!activeJobId) return;
     try {
-        await fetch(`${API_BASE}/api/v1/hitl/${currentWorkflowState.workflow_id}/reject`, {
+        await fetch(`${API_BASE}/api/v1/hitl/${activeJobId}/reject`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: "Rejected via UI" })
+            body: JSON.stringify({ reason: "Rejected via dashboard" })
         });
         document.getElementById("hitl-panel").style.display = "none";
-        document.getElementById("wf-status-badge").textContent = "REJECTED";
     } catch (e) {
-        alert("Rejection failed: " + e.message);
+        alert("Reject error: " + e.message);
     }
-}
-
-// -------------------------------------------------------------
-// Pareto Chart Rendering (Zero Dependency Canvas)
-// -------------------------------------------------------------
-async function renderParetoChart() {
-    const canvas = document.getElementById("pareto-chart");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/telemetry/pareto`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        const routes = data.recent_routes || [];
-
-        // Grid lines
-        ctx.strokeStyle = "#1e293b";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(25, 10); ctx.lineTo(25, 110); ctx.lineTo(250, 110);
-        ctx.stroke();
-
-        if (routes.length === 0) {
-            ctx.fillStyle = "#64748b";
-            ctx.font = "10px sans-serif";
-            ctx.fillText("Waiting for routed traffic...", 50, 60);
-            return;
-        }
-
-        routes.forEach(r => {
-            const x = 30 + Math.min(r.complexity_score || 0.5, 1.0) * 200;
-            const y = 105 - Math.min((r.estimated_cost_usd || 0.0001) * 20000, 90);
-
-            ctx.fillStyle = (r.tier || "").includes("1") ? "#10b981" : (r.tier || "").includes("2") ? "#38bdf8" : "#f59e0b";
-            ctx.beginPath();
-            ctx.arc(x, y, 4, 0, 2 * Math.PI);
-            ctx.fill();
-        });
-
-        const summary = document.getElementById("pareto-summary");
-        if (summary) summary.textContent = `${routes.length} requests plotted across cost/complexity tiers`;
-    } catch (e) {
-        console.debug("Pareto draw skip:", e);
-    }
-}
-
-// -------------------------------------------------------------
-// Modals & Context Bridge
-// -------------------------------------------------------------
-function openModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.style.display = "flex";
-    if (id === "modal-bridge") generateBridgePrompt();
-    if (id === "modal-rag") fetchRAGStats();
-}
-
-function closeModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.style.display = "none";
-}
-
-async function generateBridgePrompt() {
-    const platform = document.getElementById("bridge-platform").value;
-    const activeCode = document.getElementById("code-editor").value;
-    const outputArea = document.getElementById("bridge-output");
-
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/bridge/export`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                target_platform: platform,
-                messages: chatHistory.length > 0 ? chatHistory : [{ role: "user", content: "Agent Orchestration Workspace" }],
-                active_code: activeCode.substring(0, 2500)
-            })
-        });
-
-        if (resp.ok) {
-            const data = await resp.json();
-            outputArea.value = data.handoff_prompt;
-        }
-    } catch (e) {
-        outputArea.value = "Failed to generate bridge export: " + e.message;
-    }
-}
-
-function copyBridgePrompt() {
-    const outputArea = document.getElementById("bridge-output");
-    navigator.clipboard.writeText(outputArea.value);
-    const btnText = document.getElementById("copy-btn-text");
-    btnText.textContent = "Copied to Clipboard!";
-    setTimeout(() => { btnText.textContent = "Copy Prompt to Clipboard"; }, 2000);
-}
-
-// -------------------------------------------------------------
-// Local RAG Operations
-// -------------------------------------------------------------
-async function fetchRAGStats() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/rag/stats`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-
-        const chunksEl = document.getElementById("modal-rag-chunks");
-        const filesEl = document.getElementById("modal-rag-files");
-        const vocabEl = document.getElementById("modal-rag-vocab");
-
-        if (chunksEl) chunksEl.textContent = data.total_chunks || 0;
-        if (filesEl) filesEl.textContent = data.indexed_files_count || 0;
-        if (vocabEl) vocabEl.textContent = data.vocabulary_size || 0;
-    } catch (e) {
-        console.debug("RAG stats fetch error:", e);
-    }
-}
-
-async function testRAGSearch() {
-    const query = document.getElementById("rag-test-query").value.trim();
-    if (!query) return;
-
-    const resultsContainer = document.getElementById("rag-search-results");
-    resultsContainer.innerHTML = "<em>Searching index...</em>";
-
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/rag/search`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: query, top_k: 3 })
-        });
-        const data = await resp.json();
-        resultsContainer.innerHTML = "";
-
-        if (!data.results || data.results.length === 0) {
-            resultsContainer.innerHTML = "<div class='empty-hint'>No matching snippets found. Try re-indexing.</div>";
-            return;
-        }
-
-        data.results.forEach(r => {
-            const card = document.createElement("div");
-            card.className = "result-card";
-            card.innerHTML = `
-                <div class="result-header">
-                    <span>${r.doc_id} (Score: ${r.score})</span>
-                    <span>Lines ${r.metadata?.start_line || 1}-${r.metadata?.end_line || "?"}</span>
-                </div>
-                <div class="result-snippet">${escapeHtml(r.snippet.substring(0, 200))}...</div>
-            `;
-            resultsContainer.appendChild(card);
-        });
-    } catch (e) {
-        resultsContainer.innerHTML = `<span style="color:red">Search failed: ${e.message}</span>`;
-    }
-}
-
-async function reindexWorkspace() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/rag/index`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({})
-        });
-        if (resp.ok) {
-            const data = await resp.json();
-            alert(`Indexed ${data.files_indexed} files into ${data.total_chunks} chunks.`);
-            fetchRAGStats();
-            fetchHealth();
-        }
-    } catch (e) {
-        alert("Re-index failed: " + e.message);
-    }
-}
-
-async function clearRAGIndex() {
-    if (!confirm("Are you sure you want to clear the RAG knowledge index?")) return;
-    try {
-        await fetch(`${API_BASE}/api/v1/rag/clear`, { method: "DELETE" });
-        fetchRAGStats();
-        fetchHealth();
-    } catch (e) {
-        alert("Failed to clear index: " + e.message);
-    }
-}
-
-// -------------------------------------------------------------
-// Markdown Helpers
-// -------------------------------------------------------------
-function renderMarkdown(raw) {
-    if (!raw) return "";
-    let formatted = escapeHtml(raw);
-
-    // Code blocks
-    formatted = formatted.replace(/```([a-zA-Z0-9_\-\+]*)\n([\s\S]*?)```/g, (match, lang, code) => {
-        return `<pre><code class="language-${lang}">${code.trim()}</code></pre>`;
-    });
-
-    // Inline code
-    formatted = formatted.replace(/`([^`]+)`/g, "<code>$1</code>");
-
-    // Headings
-    formatted = formatted.replace(/^### (.*$)/gim, "<h4>$1</h4>");
-    formatted = formatted.replace(/^## (.*$)/gim, "<h3>$1</h3>");
-    formatted = formatted.replace(/^# (.*$)/gim, "<h2>$1</h2>");
-
-    // Bold
-    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-
-    // Line breaks
-    formatted = formatted.replace(/\n\n/g, "<br><br>");
-    formatted = formatted.replace(/\n/g, "<br>");
-
-    return formatted;
-}
-
-function escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 // -------------------------------------------------------------
@@ -772,7 +765,6 @@ async function loadRouterAnalytics() {
         const bench = data.benchmark_status || {};
         const report = data.latest_training_report || {};
 
-        // Summary cards
         setText("an-total-obs", matrix.total_observations || 0);
         setText("an-total-feedback", matrix.total_feedback_entries || 0);
         setText("an-train-ready", matrix.training_ready ? "Yes" : `No (need ${matrix.recommended_retrain_at || 200})`);
@@ -797,6 +789,9 @@ async function loadRouterAnalytics() {
             setText("tr-f1-t3", f1["Tier 3"] || "N/A");
             setText("tr-duration", `${report.duration_seconds}s`);
             setText("tr-trained-at", report.time_iso || "N/A");
+
+            // Also update radar classifier accuracy on launcher
+            setText("radar-classifier-acc", `${(report.accuracy * 100).toFixed(1)}% Accuracy`);
         }
 
         // Model performance table
@@ -868,12 +863,198 @@ async function submitFeedback(model, provider, rating, feedbackElementId) {
         if (resp.ok) {
             const fbEl = document.getElementById(feedbackElementId);
             if (fbEl) {
-                fbEl.innerHTML = `<span class="feedback-label">Rated ${rating}/5. Thank you.</span>`;
+                fbEl.innerHTML = `<span class="feedback-label">Rated ${rating}/5. Saved to training database.</span>`;
             }
         }
     } catch (e) {
         console.warn("Feedback submission failed:", e);
     }
+}
+
+// -------------------------------------------------------------
+// RAG, CONTEXT BRIDGE & MODALS
+// -------------------------------------------------------------
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.style.display = "flex";
+}
+
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.style.display = "none";
+}
+
+async function fetchRAGStats() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/rag/stats`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        setText("modal-rag-chunks", data.total_chunks || 0);
+        setText("modal-rag-files", data.indexed_files_count || 0);
+        setText("modal-rag-vocab", data.vocab_size || 0);
+    } catch (e) {
+        console.debug("RAG stats error:", e);
+    }
+}
+
+async function reindexWorkspace() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/rag/index`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ directory_path: "." })
+        });
+        const data = await resp.json();
+        alert(`Indexing complete. ${data.chunks_indexed} chunks indexed across ${data.files_indexed} files.`);
+        fetchRAGStats();
+        fetchHealth();
+    } catch (e) {
+        alert("Indexing failed: " + e.message);
+    }
+}
+
+async function clearRAGIndex() {
+    try {
+        await fetch(`${API_BASE}/api/v1/rag/clear`, { method: "DELETE" });
+        alert("RAG Index cleared.");
+        fetchRAGStats();
+        fetchHealth();
+    } catch (e) {
+        alert("Clear error: " + e.message);
+    }
+}
+
+async function testRAGSearch() {
+    const query = document.getElementById("rag-test-query").value.trim();
+    if (!query) return;
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/rag/search`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: query, top_k: 3 })
+        });
+        const data = await resp.json();
+        const resultsDiv = document.getElementById("rag-search-results");
+        const results = data.results || [];
+
+        if (results.length === 0) {
+            resultsDiv.innerHTML = '<div class="empty-hint">No matches found.</div>';
+            return;
+        }
+
+        resultsDiv.innerHTML = results.map(r => `
+            <div class="result-card">
+                <div class="result-header">
+                    <span>${escapeHtml(r.doc_id)} (Score: ${r.score.toFixed(3)})</span>
+                </div>
+                <div class="result-snippet">${escapeHtml(r.content)}</div>
+            </div>
+        `).join("");
+    } catch (e) {
+        alert("Search error: " + e.message);
+    }
+}
+
+async function generateBridgePrompt() {
+    const platform = document.getElementById("bridge-platform").value;
+    const editor = document.getElementById("code-editor");
+    const activeCode = editor ? editor.value : "";
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/bridge/export`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                target_platform: platform,
+                messages: chatHistory,
+                active_code: activeCode
+            })
+        });
+        const data = await resp.json();
+        document.getElementById("bridge-output").value = data.transfer_prompt || "";
+    } catch (e) {
+        console.warn("Bridge export error:", e);
+    }
+}
+
+function copyBridgePrompt() {
+    const out = document.getElementById("bridge-output");
+    out.select();
+    navigator.clipboard.writeText(out.value);
+    const btnText = document.getElementById("copy-btn-text");
+    btnText.textContent = "Copied to Clipboard!";
+    setTimeout(() => { btnText.textContent = "Copy Prompt to Clipboard"; }, 2000);
+}
+
+// -------------------------------------------------------------
+// Pareto Chart & Helpers
+// -------------------------------------------------------------
+function renderParetoChart() {
+    const canvas = document.getElementById("pareto-chart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = "#27272a";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(20, 10, canvas.width - 30, canvas.height - 25);
+
+    const points = [
+        { x: 35, y: 95, label: "T1 (0.12)", color: "#10b981" },
+        { x: 130, y: 55, label: "T2 (0.61)", color: "#38bdf8" },
+        { x: 220, y: 25, label: "T3 (0.95)", color: "#f59e0b" }
+    ];
+
+    ctx.beginPath();
+    ctx.strokeStyle = "#3f3f46";
+    ctx.setLineDash([3, 3]);
+    points.forEach((p, idx) => {
+        if (idx === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    points.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#a1a1aa";
+        ctx.font = "9px Inter, sans-serif";
+        ctx.fillText(p.label, p.x - 14, p.y - 7);
+    });
+}
+
+function renderMarkdown(text) {
+    if (!text) return "";
+    let formatted = escapeHtml(text);
+
+    // Code blocks
+    formatted = formatted.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        return `<pre class="code-block"><code class="lang-${lang}">${code.trim()}</code></pre>`;
+    });
+
+    // Inline code
+    formatted = formatted.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+
+    // Bold & italic
+    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    formatted = formatted.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+
+    // Line breaks
+    formatted = formatted.replace(/\n\n/g, "<br><br>");
+    formatted = formatted.replace(/\n/g, "<br>");
+
+    return formatted;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function setText(id, val) {

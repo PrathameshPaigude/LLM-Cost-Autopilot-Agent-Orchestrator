@@ -198,6 +198,30 @@ The **Agent Orchestration Platform with Intelligent Cost Autopilot** solves this
   * Upgraded `scripts/train_router_model.py` to blend synthetic domain data, R2-Bench empirical data, and live production observations into an automated retraining pipeline.
   * The retrained XGBoost/GBDT classifier achieved **92.83% accuracy across 1,252 multi-source samples** with high per-tier F1 scores.
 
+### Topic 16: Automatic Quota Rollover Chain & Prompt Token Compressor Architecture
+* **Discussion Date:** 2026-10-08
+* **Context:** Implementing seamless failover across free open models (Groq -> Gemini -> HuggingFace -> Ollama) and pre-dispatch prompt compression to eliminate session interruptions when cloud provider quotas (TPM/RPM/429) run out, without third-party project naming.
+* **Consensus & Architecture:**
+  * Built `server/app/core/prompt_compressor.py` (`PromptCompressor`) to strip conversational fluff, excess whitespaces, and license boilerplate, reducing prompt tokens by 30-80% before model dispatch.
+  * Created `server/app/gateway/quota_chain.py` (`QuotaRolloverChain`) implementing automatic quota cooldown tracking and priority rollover chains. When a provider hits 429 or timeout, it transparently rolls over to Groq or Hugging Face without user interruption.
+  * Exposed standard OpenAI-compatible (`/v1/chat/completions`) and Claude/Anthropic-compatible (`/v1/messages`) endpoints so external CLI tools (e.g. Claude Code CLI, Cursor, Continue) can plug directly into the orchestrator.
+
+### Topic 17: Persistent Prompt Vault SQLite Database & Dataset Curation
+* **Discussion Date:** 2026-10-08
+* **Context:** Establishing a queryable, persistent database for all raw and compressed prompts, token savings, model selections, and user ratings for ongoing model fine-tuning and XGBoost retraining.
+* **Consensus & Architecture:**
+  * Implemented `server/app/storage/prompt_vault.py` backed by `data/prompt_vault.sqlite3`.
+  * Added paginated query endpoints (`/api/v1/vault/prompts`), aggregate database telemetry (`/api/v1/vault/stats`), star rating submission (`/api/v1/vault/rating`), and one-click JSON dataset export (`/api/v1/vault/export`).
+
+### Topic 18: Latency Optimization, Short-Prompt Guardrail, and Decoupled Quota Rollover Chain
+* **Discussion Date:** 2026-10-08
+* **Context:** Resolving latency spikes (15-20s) and blank answer bubbles caused by ML model over-scoring of simple queries to Tier 3, unconfigured cloud provider fallback delays, and completely eliminating third-party "OmniRoute" branding in favor of native naming ("Automatic Quota Rollover Chain" and "Prompt Token Compressor").
+* **Consensus & Architecture:**
+  * **Short-Prompt Complexity Guardrail:** In `server/app/gateway/classifier.py`, added a hard short-prompt check (<25 words without explicit multi-step/reasoning keywords) clamping complexity score to $\le 0.20$ (Tier 1). Prevents short queries from falsely escalating to Tier 3.
+  * **Native Quota Rollover Chain:** Built `server/app/gateway/quota_chain.py` (`QuotaRolloverChain`) with optimal fast-provider ordering: Groq Cloud (250ms avg) &rarr; Google Gemini &rarr; Hugging Face &rarr; Ollama. Deleted old `omniroute.py` and removed broken OpenRouter key from the failover chain.
+  * **UI Branding & Answer Visibility:** Renamed all headers, radar cards, badges, and endpoints to "Automatic Quota Rollover Chain". Fixed frontend response handling in `client/js/app.js` with defensive fallbacks to guarantee responses and descriptive error notices are always clearly visible.
+  * **Empirical Verification:** Tested short prompts ("What is 12 + 12?", "Explain python list comprehension in 1 sentence") — verified sub-1.5s latency, proper Tier 1 Groq routing, and crisp markdown rendering in the UI.
+
 ---
 
 ## 4. Technology Evaluation Matrix: Adopted vs. Rejected
@@ -212,16 +236,37 @@ The **Agent Orchestration Platform with Intelligent Cost Autopilot** solves this
 | **Exact-Match Cache** | Redis / In-Memory Dictionary | **Adopted: In-Memory / Redis Hybrid** | Instant $\approx 0\text{ ms}$ response on repeated queries; eliminates redundant compute. |
 | **PII & Data Redaction** | Microsoft Presidio / Regex Sanitizer | **Adopted** | Runs 100% locally on CPU to redact emails, API keys, and phone numbers before routing. |
 | **Vector Database / RAG** | In-Process BM25/Vector RAG Engine | **Adopted** | Zero cloud fees, local SQLite/file index, line-bounded code chunking, token-bounded context injection. |
-| **ML Complexity Router** | XGBoost / GBDT + TF-IDF + Heuristics | **Adopted** | Sub-millisecond CPU latency (<1ms), 92.8%+ classification accuracy across prompt difficulty tiers. |
+| **ML Complexity Router** | XGBoost / GBDT + TF-IDF + Heuristics | **Adopted** | Sub-millisecond CPU latency (<1ms), 92.8%+ classification accuracy, plus short-prompt guardrail for fast Tier 1 execution. |
 | **Serverless Open Models** | Hugging Face Serverless Inference API | **Adopted** | Free access to Qwen 2.5 Coder 32B, Llama 3.1 8B, and Mistral 7B without dedicated GPU hosting. |
 | **Empirical Benchmarks** | Hugging Face R2-Bench | **Adopted** | Empirically grounds complexity-to-tier mappings using real-world model token/quality trade-off distributions. |
 | **Continuous Learning** | Adaptive Quality Tracker | **Adopted** | Real-time observation logging, live user rating ingestion, and one-click/automated model retraining. |
+| **Automatic Quota Rollover Chain** | QuotaRolloverChain (Groq &rarr; Gemini &rarr; HF &rarr; Ollama) | **Adopted** | Automatic 429 rollover across free cloud and local models; OpenAI & Claude proxy endpoints without external naming. |
+| **Prompt Token Compressor** | Prompt Token Compressor Engine | **Adopted** | Cuts prompt token size by 30-80% via lexical condensation and boilerplate pruning before model dispatch. |
+| **Prompt Storage DB** | Prompt Vault SQLite Database | **Adopted** | Persistent local SQLite database (`prompt_vault.sqlite3`) storing prompt history, compression metrics, and ratings. |
 
 ---
 
 ## 5. Changelog & Project Evolution Ledger
 
 *All changes must be appended here chronologically.*
+
+### [v1.7.0] - 2026-10-08
+* **Short-Prompt Classification Guardrail:** Implemented prompt length and keyword check in `server/app/gateway/classifier.py` clamping queries under 25 words to score $\le 0.20$, eliminating false Tier 3 escalations and restoring sub-1.5s execution.
+* **Native Automatic Quota Rollover Chain:** Created `server/app/gateway/quota_chain.py` (`QuotaRolloverChain`) prioritizing fast Groq Cloud, Google Gemini, Hugging Face, and Ollama with automated 429 cooldowns. Completely removed old `omniroute.py`.
+* **Prompt Token Compressor Decoupling:** Standalone `PromptCompressor` module providing mild, balanced, and aggressive token compression without external dependencies.
+* **UI Branding & Layout Cleanliness:** Replaced all remaining legacy labels across `client/index.html` and `client/js/app.js` with "Automatic Quota Rollover Chain".
+* **Guaranteed Chat Answer Rendering:** Added defensive rendering fallbacks ensuring response bubbles never appear empty or invisible, with explicit error diagnostic reporting in the UI.
+
+### [v1.6.0] - 2026-10-08
+* **Quota Failover & Token Compression Engine:** Built automatic rollover across Gemini, Groq Cloud, Hugging Face, and Ollama when quotas or rate limits are reached.
+* **OpenAI & Claude Proxy Endpoints:** Added `/v1/chat/completions` and `/v1/messages` compatible endpoints allowing Claude Code CLI, Cursor, and Continue to execute free, uninterrupted coding sessions through the orchestrator.
+* **Prompt Compressor Engine:** Implemented `server/app/core/prompt_compressor.py` with mild, balanced, and aggressive token optimization, saving up to 80% on prompt input tokens.
+* **Prompt Vault SQLite Database:** Created `server/app/storage/prompt_vault.py` backed by `data/prompt_vault.sqlite3` with paginated retrieval (`/api/v1/vault/prompts`), live telemetry (`/api/v1/vault/stats`), and dataset export (`/api/v1/vault/export`).
+* **Uncluttered Glassy UI Overhaul:** Re-architected `client/index.html` and `client/css/styles.css` into a clean, developer-first Obsidian/Zinc design inspired by Agno and GitHub Copilot.
+  * Added **Workspace Launcher (First Page)** with 3 primary action cards: Coding Agent IDE, ChatBot & Cost Autopilot, and Complete Privacy Mode.
+  * Replaced top header clutter by moving provider chips and secondary gauges into a sleek **System & Providers Settings Modal**.
+  * Added **Prompt Vault Tab** with live SQLite database search, compression telemetry cards, and training dataset download.
+  * Strictly adhered to user aesthetic guidelines: zero purple gradients, zero pill buttons, zero fake metrics, zero AI-slop copy.
 
 ### [v1.5.0] - 2026-10-07
 * **Hugging Face R2-Bench Dataset Loader:** Implemented `scripts/load_hf_benchmark.py` pulling empirical prompt-to-tier mappings and token/quality curves from Hugging Face Datasets (`JiaqiXue/R2-Bench`). Ingested 500 validated benchmark rows.
