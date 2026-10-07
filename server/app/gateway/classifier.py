@@ -142,6 +142,21 @@ class ComplexityClassifier:
 
     def explain(self, prompt: str, agent_name: str = "General") -> Dict[str, Any]:
         feats = self.extract_features(prompt, agent_name)
+
+        # --- Short-Prompt Guardrail ---
+        # If the prompt is under 25 words and has no complex domain signals,
+        # force Tier 1 routing regardless of what the ML model thinks.
+        # This prevents trivial questions from hitting slow frontier providers.
+        word_count = feats["word_count"]
+        has_complexity = (
+            feats["has_architecture_keywords"]
+            or feats["has_strong_architecture_keywords"]
+            or feats["has_algorithm_keywords"]
+            or feats["has_deep_domain"]
+            or feats["is_coding"]
+        )
+        force_tier1 = word_count < 25 and not has_complexity
+
         signals = {
             "length_contribution": 0.0,
             "intent_contribution": 0.0,
@@ -190,6 +205,10 @@ class ComplexityClassifier:
                 # Weighted continuous score: P(Tier 2)*0.50 + P(Tier 3)*1.00 + agent bias
                 ml_score = float(probs[1] * 0.50 + probs[2] * 0.95 + feats["agent_weight"] * 0.15)
                 ml_score = min(max(ml_score, 0.05), 1.0)
+                # Apply short-prompt guardrail clamp
+                if force_tier1:
+                    ml_score = min(ml_score, 0.20)
+                    signals["matched_signal_flags"].append("short_prompt_guardrail")
                 if feats["has_deep_domain"]:
                     signals["matched_signal_flags"].append("deep_domain_keyword")
                 if feats["is_coding"]:
@@ -260,6 +279,10 @@ class ComplexityClassifier:
 
         signals["length_contribution"] = round((min(feats["word_count"], 400) / 400) * 0.50, 3)
         score = signals["length_contribution"] + feats["agent_weight"]
+        # Apply short-prompt guardrail clamp
+        if force_tier1:
+            score = min(score, 0.20)
+            signals["matched_signal_flags"].append("short_prompt_guardrail")
         return self._explanation(min(max(score, 0.15), 0.90), feats, signals)
 
     @staticmethod

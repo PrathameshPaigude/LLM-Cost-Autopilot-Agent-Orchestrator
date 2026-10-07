@@ -27,11 +27,16 @@ from .providers.openrouter_provider import openrouter_provider
 from .providers.huggingface_provider import huggingface_provider
 from .providers.ollama_provider import ollama_provider
 from .storage.rag_engine import rag_engine
+from .storage.prompt_vault import prompt_vault
+from .core.prompt_compressor import prompt_compressor
+from .gateway.quota_chain import quota_chain
+import time
+import uuid
 
 app = FastAPI(
     title="Agent Orchestration Platform & LLM Cost Autopilot",
-    version="1.5.0",
-    description="Multi-Agent AI Platform with Intelligent LLM Routing Gateway, Zero-Cost Free Tiers, HuggingFace Benchmark Ingestion, Adaptive Performance Quality Tracking, and RAG Context Indexing."
+    version="1.6.0",
+    description="Multi-Agent AI Platform with Automatic Quota Rollover Chain, Prompt Vault SQLite Archive, Token Compressor, Free Tiers, and RAG Indexing."
 )
 
 # Enable CORS for web UI client
@@ -107,6 +112,31 @@ class TrainRouterRequest(BaseModel):
     include_benchmarks: Optional[bool] = True
     include_observations: Optional[bool] = True
     min_obs: Optional[int] = 10
+
+class CompressRequest(BaseModel):
+    text: str
+    mode: Optional[str] = "balanced"
+
+class VaultRatingRequest(BaseModel):
+    id: int
+    rating: int
+
+class OpenAIChatRequest(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    messages: List[Dict[str, Any]]
+    model: Optional[str] = "default"
+    stream: Optional[bool] = False
+    temperature: Optional[float] = 0.7
+    compression: Optional[str] = "balanced"
+
+class AnthropicMessageRequest(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    messages: List[Dict[str, Any]]
+    model: Optional[str] = "claude-3-5-sonnet"
+    system: Optional[str] = None
+    stream: Optional[bool] = False
+    max_tokens: Optional[int] = 4096
+    compression: Optional[str] = "balanced"
 
 # -------------------------------------------------------------
 # Endpoints
@@ -558,6 +588,162 @@ def retrain_router_classifier(req: Optional[TrainRouterRequest] = None):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Retraining failed: {str(e)}")
+
+
+# -------------------------------------------------------------
+# PROMPT VAULT & COMPRESSION ENDPOINTS
+# -------------------------------------------------------------
+@app.get("/api/v1/vault/prompts")
+def get_vault_prompts(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    tier: Optional[str] = None,
+    model: Optional[str] = None,
+    search: Optional[str] = None
+):
+    """Retrieves stored prompts from the persistent PromptVault SQLite database."""
+    prompts = prompt_vault.get_recent_prompts(limit=limit, offset=offset, tier=tier, model=model, search=search)
+    return {"prompts": prompts, "count": len(prompts)}
+
+@app.get("/api/v1/vault/stats")
+def get_vault_stats():
+    """Returns database telemetry, compression totals, and training-ready sample counts."""
+    return prompt_vault.get_stats()
+
+@app.post("/api/v1/vault/rating")
+def rate_vault_prompt(req: VaultRatingRequest):
+    """Updates user rating for a stored prompt."""
+    success = prompt_vault.update_rating(req.id, req.rating)
+    return {"status": "success" if success else "error"}
+
+@app.get("/api/v1/vault/export")
+def export_vault_dataset():
+    """Exports all training-ready prompts for ML classifier retraining or LLM fine-tuning."""
+    dataset = prompt_vault.export_dataset_for_training()
+    return {"dataset": dataset, "samples": len(dataset)}
+
+@app.post("/api/v1/compress")
+def test_prompt_compression(req: CompressRequest):
+    """Compresses prompt text and returns token optimization metrics."""
+    compressed, metrics = prompt_compressor.compress(req.text, mode=req.mode or "balanced")
+    return {"compressed_text": compressed, "metrics": metrics}
+
+# -------------------------------------------------------------
+# QUOTA ROLLOVER CHAIN PROXY ENDPOINTS (OPENAI & CLAUDE / ANTHROPIC COMPATIBLE)
+# -------------------------------------------------------------
+@app.get("/api/v1/quota-chain/status")
+def get_quota_chain_status():
+    """Returns provider health, cooldown status, and failover statistics for the Quota Rollover Chain."""
+    return {
+        "providers": quota_chain.get_provider_health(),
+        "stats": quota_chain._stats
+    }
+
+@app.post("/v1/chat/completions")
+def openai_chat_completions(req: OpenAIChatRequest):
+    """
+    OpenAI-compatible proxy endpoint for Cursor, Continue, Aider, and IDE extensions.
+    Applies prompt compression and automatic multi-provider failover.
+    """
+    system_prompt = None
+    user_prompt = ""
+    for msg in req.messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        if role == "system":
+            system_prompt = content
+        elif role == "user":
+            user_prompt = content
+
+    result = quota_chain.execute_with_failover(
+        prompt=user_prompt,
+        system_prompt=system_prompt,
+        compression_mode=req.compression or "balanced",
+        preferred_model=req.model
+    )
+
+    created_epoch = int(time.time())
+    completion_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+    prompt_tokens = result["compression"]["compressed_tokens"]
+    completion_tokens = max(1, len(result["response"].split()) * 4 // 3)
+
+    return {
+        "id": completion_id,
+        "object": "chat.completion",
+        "created": created_epoch,
+        "model": result["model"] or req.model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": result["response"]
+                },
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens
+        },
+        "quota_chain": {
+            "provider_used": result["provider"],
+            "failovers_count": result["failovers_count"],
+            "tokens_saved": result["compression"]["tokens_saved"],
+            "latency_ms": result["latency_ms"]
+        }
+    }
+
+@app.post("/v1/messages")
+def anthropic_messages(req: AnthropicMessageRequest):
+    """
+    Anthropic/Claude-compatible proxy endpoint for Claude Code CLI and Anthropic clients.
+    Automatically handles Claude rate limit rollover and token compression.
+    """
+    user_prompt = ""
+    for msg in req.messages:
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            content = " ".join(block.get("text", "") for block in content if isinstance(block, dict))
+        if msg.get("role") == "user":
+            user_prompt = content
+
+    result = quota_chain.execute_with_failover(
+        prompt=user_prompt,
+        system_prompt=req.system,
+        compression_mode=req.compression or "balanced",
+        preferred_model=req.model
+    )
+
+    msg_id = f"msg_{uuid.uuid4().hex[:16]}"
+    prompt_tokens = result["compression"]["compressed_tokens"]
+    completion_tokens = max(1, len(result["response"].split()) * 4 // 3)
+
+    return {
+        "id": msg_id,
+        "type": "message",
+        "role": "assistant",
+        "content": [
+            {
+                "type": "text",
+                "text": result["response"]
+            }
+        ],
+        "model": result["model"] or req.model,
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {
+            "input_tokens": prompt_tokens,
+            "output_tokens": completion_tokens
+        },
+        "quota_chain": {
+            "provider_used": result["provider"],
+            "failovers_count": result["failovers_count"],
+            "tokens_saved": result["compression"]["tokens_saved"],
+            "latency_ms": result["latency_ms"]
+        }
+    }
 
 
 # Serve static client UI — must be mounted AFTER all API routes

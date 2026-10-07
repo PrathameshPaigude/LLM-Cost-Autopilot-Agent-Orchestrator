@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 from ..core.config import settings
 from ..core.telemetry import telemetry
 from ..core.quality_tracker import quality_tracker
+from ..storage.prompt_vault import prompt_vault
 from .classifier import classifier
 from .cache import cache
 from .redactor import redactor
@@ -188,6 +189,20 @@ class CostAutopilotRouter:
                     success=True,
                     cache_hit=True
                 )
+                prompt_vault.store_prompt(
+                    original_prompt=sanitized_prompt,
+                    tier_used="Tier 0 (Exact-Match Cache)",
+                    provider="Cache",
+                    model_name="cache",
+                    complexity_score=0.0,
+                    response_snippet=(cached_result or "")[:300],
+                    tokens_in=0,
+                    tokens_out=0,
+                    cost_usd=0.0,
+                    latency_ms=0.0,
+                    is_cached=True,
+                    agent_name=agent_name or "General"
+                )
                 return {
                     "response": cached_result,
                     "complexity_score": 0.0,
@@ -337,13 +352,23 @@ class CostAutopilotRouter:
             # Tier 3 (Score > 0.70): Deep reasoning, math proofs, distributed architecture
             else:
                 tier_used = "Tier 3 (Frontier Reasoning)"
-                if openrouter_provider.is_configured():
+                # Groq 120B first (fastest response time, reliable free tier)
+                if groq_provider.is_configured():
                     try:
-                        provider_name = "OpenRouter"
-                        model_name = "deepseek/deepseek-r1"
-                        response_text = invoke(provider_name, model_name, tier_used, "Tier 3 OpenRouter DeepSeek R1", lambda: openrouter_provider.generate(model_name, sanitized_prompt, system_prompt))
+                        provider_name = "Groq Cloud"
+                        model_name = settings.GROQ_TIER3_MODEL
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 3 Groq 120B", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
+                        model_name = getattr(groq_provider, "last_model_used", None) or model_name
                     except Exception as e:
-                        logger.warning(f"Tier 3 OpenRouter failed: {e}")
+                        logger.warning(f"Tier 3 Groq failed: {e}")
+
+                if not response_text and gemini_provider.is_configured():
+                    try:
+                        provider_name = "Google Gemini"
+                        model_name = "gemini-flash-latest"
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 3 Gemini Flash", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
+                    except Exception as e:
+                        logger.warning(f"Tier 3 Gemini failed: {e}")
 
                 if not response_text and openai_provider.is_configured():
                     try:
@@ -353,22 +378,13 @@ class CostAutopilotRouter:
                     except Exception as e:
                         logger.warning(f"Tier 3 OpenAI failed: {e}")
 
-                if not response_text and gemini_provider.is_configured():
+                if not response_text and openrouter_provider.is_configured():
                     try:
-                        provider_name = "Google Gemini"
-                        model_name = "gemini-pro-latest"
-                        response_text = invoke(provider_name, model_name, tier_used, "Tier 3 Gemini Pro", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
+                        provider_name = "OpenRouter"
+                        model_name = "deepseek/deepseek-r1"
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 3 OpenRouter DeepSeek R1", lambda: openrouter_provider.generate(model_name, sanitized_prompt, system_prompt))
                     except Exception as e:
-                        logger.warning(f"Tier 3 Gemini failed: {e}")
-
-                if not response_text and groq_provider.is_configured():
-                    try:
-                        provider_name = "Groq Cloud"
-                        model_name = settings.GROQ_TIER3_MODEL
-                        response_text = invoke(provider_name, model_name, tier_used, "Tier 3 Groq 120B", lambda: groq_provider.generate(model_name, sanitized_prompt, system_prompt))
-                        model_name = getattr(groq_provider, "last_model_used", None) or model_name
-                    except Exception as e:
-                        logger.warning(f"Tier 3 Groq failed: {e}")
+                        logger.warning(f"Tier 3 OpenRouter failed: {e}")
 
             # Fallback to local Ollama if all cloud options failed in auto mode
             if not response_text and actual_mode == "auto":
@@ -436,6 +452,22 @@ class CostAutopilotRouter:
             cost_usd=audit["selected"].get("actual_cost_usd") or 0.0,
             success=bool(response_text),
             cache_hit=False
+        )
+
+        # Store in SQLite PromptVault for continuous training & audit
+        prompt_vault.store_prompt(
+            original_prompt=sanitized_prompt,
+            tier_used=tier_used,
+            provider=provider_name,
+            model_name=model_name,
+            complexity_score=score or 0.0,
+            response_snippet=(response_text or "")[:300],
+            tokens_in=input_tokens,
+            tokens_out=output_tokens,
+            cost_usd=audit["selected"].get("actual_cost_usd") or 0.0,
+            latency_ms=latency_seconds * 1000,
+            is_cached=False,
+            agent_name=agent_name or "General"
         )
 
         return {
