@@ -31,8 +31,12 @@ _FALLBACK_MODEL_COSTS = {
     "gemini-flash-latest": {"input": 0.30, "output": 2.50, "confidence": 0.82, "provider": "Google Gemini"},
     "deepseek/deepseek-r1": {"input": 0.70, "output": 2.50, "confidence": 0.88, "provider": "OpenRouter"},
     "Qwen/Qwen2.5-Coder-32B-Instruct": {"input": 0.0, "output": 0.0, "confidence": 0.85, "provider": "Hugging Face"},
+    "meta-llama/Llama-3.3-70B-Instruct": {"input": 0.0, "output": 0.0, "confidence": 0.90, "provider": "Hugging Face"},
     "meta-llama/Llama-3.1-8B-Instruct": {"input": 0.0, "output": 0.0, "confidence": 0.80, "provider": "Hugging Face"},
     "mistralai/Mistral-7B-Instruct-v0.3": {"input": 0.0, "output": 0.0, "confidence": 0.78, "provider": "Hugging Face"},
+    "Qwen/Qwen2.5-72B-Instruct": {"input": 0.0, "output": 0.0, "confidence": 0.89, "provider": "Hugging Face"},
+    "google/gemma-2-9b-it": {"input": 0.0, "output": 0.0, "confidence": 0.80, "provider": "Hugging Face"},
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B": {"input": 0.0, "output": 0.0, "confidence": 0.87, "provider": "Hugging Face"},
     "qwen2.5:1.5b": {"input": 0.0, "output": 0.0, "confidence": 0.70, "provider": "Ollama"},
     "llama3.1:8b-instruct-q4_K_M": {"input": 0.0, "output": 0.0, "confidence": 0.70, "provider": "Ollama"},
     "cache": {"input": 0.0, "output": 0.0, "confidence": 1.0, "provider": "Cache"},
@@ -270,7 +274,9 @@ class CostAutopilotRouter:
                     provider_name = "OpenRouter"
                     tier_used = "Manual (OpenRouter)"
                     response_text = invoke("OpenRouter", model_name, tier_used, "manual provider override", lambda: openrouter_provider.generate(model_name, sanitized_prompt, system_prompt))
-                elif prov in ("huggingface", "hf") and huggingface_provider.is_configured():
+                elif prov in ("huggingface", "hf"):
+                    if not huggingface_provider.is_configured():
+                        raise RuntimeError("Hugging Face is selected, but HUGGINGFACE_API_KEY / HF_TOKEN is not configured in .env.")
                     model_name = model_override or "Qwen/Qwen2.5-Coder-32B-Instruct"
                     provider_name = "Hugging Face"
                     tier_used = "Manual (Hugging Face)"
@@ -321,6 +327,14 @@ class CostAutopilotRouter:
                     except Exception as e:
                         logger.warning(f"Tier 1 Gemini failed: {e}")
 
+                if not response_text and huggingface_provider.is_configured():
+                    try:
+                        provider_name = "Hugging Face"
+                        model_name = "meta-llama/Llama-3.1-8B-Instruct"
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 1 Hugging Face Llama 8B", lambda: huggingface_provider.generate(model_name, sanitized_prompt, system_prompt))
+                    except Exception as e:
+                        logger.warning(f"Tier 1 HuggingFace failed: {e}")
+
             # Tier 2 (0.30 <= Score <= 0.70): Balanced reasoning & full-stack code
             elif score <= settings.ROUTING_TIER2_MAX:
                 tier_used = "Tier 2 (Balanced Reasoning)"
@@ -369,6 +383,14 @@ class CostAutopilotRouter:
                         response_text = invoke(provider_name, model_name, tier_used, "Tier 3 Gemini Flash", lambda: gemini_provider.generate(model_name, sanitized_prompt, system_prompt))
                     except Exception as e:
                         logger.warning(f"Tier 3 Gemini failed: {e}")
+
+                if not response_text and huggingface_provider.is_configured():
+                    try:
+                        provider_name = "Hugging Face"
+                        model_name = "meta-llama/Llama-3.3-70B-Instruct"
+                        response_text = invoke(provider_name, model_name, tier_used, "Tier 3 Hugging Face Llama 3.3 70B", lambda: huggingface_provider.generate(model_name, sanitized_prompt, system_prompt))
+                    except Exception as e:
+                        logger.warning(f"Tier 3 HuggingFace failed: {e}")
 
                 if not response_text and openai_provider.is_configured():
                     try:

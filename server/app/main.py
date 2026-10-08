@@ -214,10 +214,14 @@ def list_available_models():
                 "type": "Cloud (Serverless Free Hub)",
                 "configured": huggingface_provider.is_configured(),
                 "models": [
+                    {"id": "meta-llama/Llama-3.3-70B-Instruct", "name": "Llama 3.3 70B Instruct (Frontier - Free)", "tier": "Tier 3"},
+                    {"id": "Qwen/Qwen2.5-72B-Instruct", "name": "Qwen 2.5 72B Instruct (Frontier - Free)", "tier": "Tier 3"},
                     {"id": "Qwen/Qwen2.5-Coder-32B-Instruct", "name": "Qwen 2.5 Coder 32B (Top Coding - Free)", "tier": "Tier 2"},
-                    {"id": "meta-llama/Llama-3.1-8B-Instruct", "name": "Llama 3.1 8B Instruct (Free)", "tier": "Tier 1"},
-                    {"id": "mistralai/Mistral-7B-Instruct-v0.3", "name": "Mistral 7B v0.3 (Free)", "tier": "Tier 1"},
-                    {"id": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct", "name": "DeepSeek Coder V2 Lite (Free)", "tier": "Tier 2"}
+                    {"id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", "name": "DeepSeek R1 Distill 32B (Reasoning - Free)", "tier": "Tier 2"},
+                    {"id": "meta-llama/Llama-3.1-8B-Instruct", "name": "Llama 3.1 8B Instruct (Fast - Free)", "tier": "Tier 1"},
+                    {"id": "mistralai/Mistral-7B-Instruct-v0.3", "name": "Mistral 7B v0.3 (Fast - Free)", "tier": "Tier 1"},
+                    {"id": "google/gemma-2-9b-it", "name": "Gemma 2 9B (Fast - Free)", "tier": "Tier 1"},
+                    {"id": "microsoft/Phi-3.5-mini-instruct", "name": "Phi 3.5 Mini (Fast - Free)", "tier": "Tier 1"}
                 ]
             },
             {

@@ -8,6 +8,7 @@ from server.app.core.config import settings
 from server.app.providers import (
     gemini_provider, 
     groq_provider, 
+    huggingface_provider,
     openrouter_provider, 
     openai_provider, 
     ollama_provider
@@ -23,6 +24,7 @@ def test_all_apis():
     providers = [
         ("Google Gemini", gemini_provider, "gemini-2.0-flash"),
         ("Groq Cloud", groq_provider, "openai/gpt-oss-20b"),
+        ("Hugging Face", huggingface_provider, "Qwen/Qwen2.5-Coder-32B-Instruct"),
         ("OpenRouter", openrouter_provider, "deepseek/deepseek-r1"),
         ("OpenAI", openai_provider, "gpt-4o-mini"),
         ("Local Ollama", ollama_provider, settings.LOCAL_TIER1_MODEL)

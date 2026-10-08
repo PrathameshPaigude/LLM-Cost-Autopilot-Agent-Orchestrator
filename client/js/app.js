@@ -406,9 +406,13 @@ async function handleChatSubmit(event) {
     let modelOverride = null;
 
     if (modelSelect !== "auto") {
-        const parts = modelSelect.split(":");
-        providerOverride = parts[0];
-        modelOverride = parts[1];
+        const colonIdx = modelSelect.indexOf(":");
+        if (colonIdx !== -1) {
+            providerOverride = modelSelect.substring(0, colonIdx);
+            modelOverride = modelSelect.substring(colonIdx + 1);
+        } else {
+            providerOverride = modelSelect;
+        }
     }
 
     // Optional RAG Context

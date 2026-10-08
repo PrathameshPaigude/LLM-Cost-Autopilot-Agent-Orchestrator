@@ -9,8 +9,12 @@
     "gemini-flash-latest": {"input": 0.30, "output": 2.50, "confidence": 0.82, "provider": "Google Gemini"},
     "deepseek/deepseek-r1": {"input": 0.70, "output": 2.50, "confidence": 0.88, "provider": "OpenRouter"},
     "Qwen/Qwen2.5-Coder-32B-Instruct": {"input": 0.0, "output": 0.0, "confidence": 0.85, "provider": "Hugging Face"},
+    "meta-llama/Llama-3.3-70B-Instruct": {"input": 0.0, "output": 0.0, "confidence": 0.90, "provider": "Hugging Face"},
     "meta-llama/Llama-3.1-8B-Instruct": {"input": 0.0, "output": 0.0, "confidence": 0.80, "provider": "Hugging Face"},
     "mistralai/Mistral-7B-Instruct-v0.3": {"input": 0.0, "output": 0.0, "confidence": 0.78, "provider": "Hugging Face"},
+    "Qwen/Qwen2.5-72B-Instruct": {"input": 0.0, "output": 0.0, "confidence": 0.89, "provider": "Hugging Face"},
+    "google/gemma-2-9b-it": {"input": 0.0, "output": 0.0, "confidence": 0.80, "provider": "Hugging Face"},
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B": {"input": 0.0, "output": 0.0, "confidence": 0.87, "provider": "Hugging Face"},
     "qwen2.5:1.5b": {"input": 0.0, "output": 0.0, "confidence": 0.70, "provider": "Ollama"},
     "llama3.1:8b-instruct-q4_K_M": {"input": 0.0, "output": 0.0, "confidence": 0.70, "provider": "Ollama"},
     "cache": {"input": 0.0, "output": 0.0, "confidence": 1.0, "provider": "Cache"}

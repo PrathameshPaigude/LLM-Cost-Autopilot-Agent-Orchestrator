@@ -125,6 +125,8 @@ class QuotaRolloverChain:
                     target_model = preferred_model
                 elif provider_name == "Google Gemini" and "gemini" in preferred_model.lower():
                     target_model = preferred_model
+                elif provider_name == "Hugging Face" and any(k in preferred_model.lower() for k in ("huggingface", "qwen", "llama", "mistral", "gemma", "deepseek")):
+                    target_model = preferred_model
 
             try:
                 logger.info(f"QuotaChain: Dispatch -> {provider_name} ({target_model})")
