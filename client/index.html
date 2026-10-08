@@ -3,955 +3,893 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent Orchestrator & LLM Cost Autopilot</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="css/styles.css?v=2.1.0">
+    <title>LLM Orchestrator &mdash; Smarter AI. Lower Costs.</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="css/styles.css?v=3.0.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body class="theme-dark">
-    <div class="app-layout">
-        <!-- Main Application Header (Clean & Uncluttered) -->
-        <header class="app-header">
-            <div class="header-left">
-                <a href="#home" class="app-brand" onclick="switchMainSection('home'); return false;">
-                    <svg class="brand-logo" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+
+    <!-- Subtle Topographic Contour Background Lines -->
+    <div class="topographic-bg" aria-hidden="true">
+        <svg viewBox="0 0 1600 1000" preserveAspectRatio="none">
+            <!-- Top-Left Flowing Elevation Lines -->
+            <path d="M-50,60 C120,40 220,120 280,240 C340,360 260,500 120,540 C20,570 -30,520 -80,560" />
+            <path d="M-60,110 C140,90 260,180 320,300 C380,420 300,560 160,600 C60,630 10,620 -60,650" />
+            <path d="M-70,160 C160,140 300,240 360,360 C420,480 340,620 200,660 C100,690 50,690 -40,730" />
+            <path d="M-80,210 C180,190 340,300 400,420 C460,540 380,680 240,720 C140,750 90,760 -20,810" />
+            <path d="M-90,260 C200,240 380,360 440,480 C500,600 420,740 280,780 C180,810 130,830 0,890" />
+            <path d="M-100,310 C220,290 420,420 480,540 C540,660 460,800 320,840 C220,870 170,900 20,970" />
+
+            <!-- Bottom-Left Deep Swirls -->
+            <path d="M-50,750 C100,700 200,780 260,860 C320,940 360,1020 400,1100" />
+            <path d="M-50,810 C120,760 240,840 300,920 C360,1000 400,1080 440,1160" />
+
+            <!-- Bottom-Right Flowing Elevation Lines -->
+            <path d="M1650,550 C1480,520 1360,640 1300,780 C1240,920 1340,1020 1480,1060" />
+            <path d="M1660,610 C1440,580 1310,700 1250,840 C1190,980 1290,1080 1430,1120" />
+            <path d="M1670,670 C1400,640 1260,760 1200,900 C1140,1040 1240,1140 1380,1180" />
+            <path d="M1680,730 C1360,700 1210,820 1150,960 C1090,1100 1190,1200 1330,1240" />
+
+            <!-- Top-Right Subtle Loops -->
+            <path d="M1650,40 C1500,70 1420,160 1400,280 C1380,400 1460,490 1560,520" />
+            <path d="M1660,90 C1460,120 1370,220 1350,340 C1330,460 1410,550 1510,580" />
+            <path d="M1670,140 C1420,170 1320,280 1300,400 C1280,520 1360,610 1460,640" />
+            <path d="M1680,190 C1380,220 1270,340 1250,460 C1230,580 1310,670 1410,700" />
+        </svg>
+    </div>
+
+    <!-- Master Three-Column Application Container -->
+    <div class="app-container">
+
+        <!-- ============================================================= -->
+        <!-- COLUMN 1: LEFT SIDEBAR (NAVIGATION + CONVERSATIONS)           -->
+        <!-- ============================================================= -->
+        <aside class="sidebar-left">
+            <!-- Branding -->
+            <div class="brand-header">
+                <div class="brand-icon">
+                    <!-- Elegant 4-pointed Geometric Star Icon -->
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0C12 7.5 16.5 12 24 12C16.5 12 12 16.5 12 24C12 16.5 7.5 12 0 12C7.5 12 12 7.5 12 0Z"/>
                     </svg>
-                    <span class="brand-title">Agent Orchestrator</span>
-                    <span class="brand-version">v1.6.0</span>
+                </div>
+                <div class="brand-text">
+                    <h1>LLM Orchestrator</h1>
+                    <p>Smarter AI. Lower Costs.</p>
+                </div>
+            </div>
+
+            <!-- Prominent New Conversation Button -->
+            <button class="btn-new-chat" id="btn-new-conversation" onclick="startNewChat()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>New Conversation</span>
+            </button>
+
+            <!-- Navigation Links -->
+            <nav class="sidebar-nav">
+                <a class="nav-link active" id="nav-home" onclick="switchNavSection('home')">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                    <span>Home</span>
                 </a>
+                <a class="nav-link" id="nav-files" onclick="switchNavSection('files')">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>My Files</span>
+                </a>
+                <a class="nav-link" id="nav-workflows" onclick="switchNavSection('workflows')">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="7" width="6" height="6" rx="1"></rect>
+                        <rect x="16" y="3" width="6" height="6" rx="1"></rect>
+                        <rect x="16" y="15" width="6" height="6" rx="1"></rect>
+                        <path d="M8 10h4a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h0"></path>
+                        <path d="M12 10V6a2 2 0 0 1 2-2h2"></path>
+                    </svg>
+                    <span>Workflows</span>
+                </a>
+                <a class="nav-link" id="nav-models" onclick="switchNavSection('models')">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                    <span>Models</span>
+                </a>
+            </nav>
 
-                <!-- Clean Mode Navigation Tabs -->
-                <nav class="mode-nav" aria-label="Application Sections">
-                    <button class="nav-tab active" id="tab-home" onclick="switchMainSection('home')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                        </svg>
-                        <span>Workspace</span>
-                    </button>
-                    <button class="nav-tab" id="tab-coding" onclick="switchMainSection('coding')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="16 18 22 12 16 6"></polyline>
-                            <polyline points="8 6 2 12 8 18"></polyline>
-                        </svg>
-                        <span>Coding Agent</span>
-                    </button>
-                    <button class="nav-tab" id="tab-chat" onclick="switchMainSection('chat')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                        </svg>
-                        <span>LLM Chat</span>
-                    </button>
-                    <button class="nav-tab" id="tab-analytics" onclick="switchMainSection('analytics')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="20" x2="18" y2="10"></line>
-                            <line x1="12" y1="20" x2="12" y2="4"></line>
-                            <line x1="6" y1="20" x2="6" y2="14"></line>
-                        </svg>
-                        <span>Router Analytics</span>
-                    </button>
-                    <button class="nav-tab" id="tab-vault" onclick="switchMainSection('vault')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
-                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
-                        </svg>
-                        <span>Prompt Vault</span>
-                    </button>
-                </nav>
-            </div>
+            <div class="sidebar-divider"></div>
 
-            <!-- Right Controls: Status & System Settings -->
-            <div class="header-right">
-                <!-- Automatic Quota Rollover Chain Indicator -->
-                <div class="quota-chain-pill" id="quota-chain-badge" title="Automatic Quota Rollover Chain Active across free models">
-                    <span class="status-indicator online"></span>
-                    <span>Quota Rollover Active</span>
+            <!-- Chat History Section -->
+            <div class="history-section">
+                <div class="history-header">
+                    <span class="history-title">Chat History</span>
+                    <button class="history-search-btn" title="Search conversations" onclick="promptHistorySearch()">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </button>
                 </div>
 
-                <!-- Air-Gapped Privacy Mode Toggle -->
-                <button class="btn btn-secondary btn-sm" id="btn-privacy" onclick="togglePrivacyMode()" title="Toggle Offline Air-Gapped Privacy Mode">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                    </svg>
-                    <span id="privacy-label">Cloud Active</span>
-                </button>
+                <div class="history-list" id="conversation-history-list">
+                    <!-- Today -->
+                    <div class="history-group">
+                        <div class="history-group-title">Today</div>
+                        <div class="history-items">
+                            <div class="history-item" onclick="loadSampleChat('Solar research analysis')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>Solar research analysis</span>
+                            </div>
+                            <div class="history-item" onclick="loadSampleChat('Compare GPT vs Claude')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>Compare GPT vs Claude</span>
+                            </div>
+                            <div class="history-item" onclick="loadSampleChat('Build a data pipeline')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>Build a data pipeline</span>
+                            </div>
+                            <div class="history-item" onclick="loadSampleChat('RAG implementation')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>RAG implementation</span>
+                            </div>
+                            <div class="history-item" onclick="loadSampleChat('Docker setup error')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>Docker setup error</span>
+                            </div>
+                        </div>
+                    </div>
 
-                <!-- System & Providers Settings Button (Hides Clutter) -->
-                <button class="btn btn-secondary btn-sm" onclick="openModal('modal-settings')" title="Manage Providers, API Keys, Telemetry & Caching">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06c.5.5 1.21.67 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.5.5-.67 1.21-.33 1.82V9c.26.604.852 1 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                    </svg>
-                    <span>Settings</span>
-                </button>
-            </div>
-        </header>
+                    <!-- Yesterday -->
+                    <div class="history-group">
+                        <div class="history-group-title">Yesterday</div>
+                        <div class="history-items">
+                            <div class="history-item" onclick="loadSampleChat('Resume improvement')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>Resume improvement</span>
+                            </div>
+                            <div class="history-item" onclick="loadSampleChat('Prepare for interview')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>Prepare for interview</span>
+                            </div>
+                            <div class="history-item" onclick="loadSampleChat('Vibe coding: portfolio site')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>Vibe coding: portfolio site</span>
+                            </div>
+                            <div class="history-item" onclick="loadSampleChat('ML model training help')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>ML model training help</span>
+                            </div>
+                        </div>
+                    </div>
 
-        <!-- ============================================================= -->
-        <!-- SECTION 0: WORKSPACE LAUNCHER (FIRST PAGE / CLEAN HOMEPAGE)   -->
-        <!-- ============================================================= -->
-        <main class="workspace-section active" id="section-home">
-            <div class="launcher-layout">
-                <!-- Hero Section: What would you like to build? -->
-                <div class="launcher-hero">
-                    <h1 class="launcher-title">What would you like to do?</h1>
-                    <p class="launcher-subtitle">
-                        Select a specialized execution mode or run an autonomous multi-agent engineering workflow.
-                    </p>
+                    <!-- Last 7 days -->
+                    <div class="history-group">
+                        <div class="history-group-title">Last 7 days</div>
+                        <div class="history-items">
+                            <div class="history-item" onclick="loadSampleChat('Drone project ideas')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>Drone project ideas</span>
+                            </div>
+                            <div class="history-item" onclick="loadSampleChat('System design discussion')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>System design discussion</span>
+                            </div>
+                            <div class="history-item" onclick="loadSampleChat('Dataset analysis results')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                                <span>Dataset analysis results</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+            </div>
 
-                <!-- Three Primary Action Cards -->
-                <div class="workspace-choice-grid">
-                    <!-- Choice 1: Coding Agent -->
-                    <div class="choice-card" onclick="switchMainSection('coding')">
-                        <div class="choice-card-header">
-                            <div class="choice-icon-wrap">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <!-- User Account Bottom Bar -->
+            <div class="user-account-bar" onclick="openModal('modal-settings')">
+                <div class="user-info">
+                    <div class="user-avatar">P</div>
+                    <span class="user-name">Prathamesh</span>
+                </div>
+                <div class="user-chevron">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ============================================================= -->
+        <!-- COLUMN 2: CENTER MAIN WORKSPACE                               -->
+        <!-- ============================================================= -->
+        <main class="main-workspace" id="center-workspace">
+
+            <!-- VIEW A: CLEAN WORKSPACE HOME (DEFAULT) -->
+            <div class="workspace-scroll-area" id="view-home">
+                <div class="launcher-hub">
+
+                    <!-- Dynamic Time-Based Greeting & Motivational Quote -->
+                    <div class="greeting-section">
+                        <h2 class="greeting-title" id="greeting-heading">
+                            <span>Good morning, Prathamesh!</span>
+                            <span class="sun-icon" id="greeting-sun-icon">
+                                <!-- Clean warm yellow sun icon -->
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FFD43B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="5"></circle>
+                                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                                </svg>
+                            </span>
+                        </h2>
+                        <p class="greeting-quote" id="greeting-quote-text">
+                            “A new day, a new opportunity to build something amazing.”
+                        </p>
+                    </div>
+
+                    <!-- Exactly Three Primary Action Cards -->
+                    <div class="primary-cards-grid">
+                        <!-- Card 1: Code -->
+                        <div class="action-card" onclick="launchCodeMode()">
+                            <div class="card-icon-pill">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                     <polyline points="16 18 22 12 16 6"></polyline>
                                     <polyline points="8 6 2 12 8 18"></polyline>
                                 </svg>
                             </div>
-                            <span class="choice-badge">Multi-Agent DAG</span>
+                            <h3 class="card-title">Code</h3>
+                            <p class="card-desc">Build, debug, and iterate with the best models.</p>
                         </div>
-                        <h2 class="choice-title">Coding Agent IDE</h2>
-                        <p class="choice-desc">
-                            Autonomous multi-agent code generation, workspace file tree editor, test execution, and DAG task decomposition.
-                        </p>
-                        <div class="choice-action">
-                            <span class="choice-link-text">Launch Coding Workspace &rarr;</span>
-                        </div>
-                    </div>
 
-                    <!-- Choice 2: LLM Chat & Cost Autopilot -->
-                    <div class="choice-card" onclick="switchMainSection('chat')">
-                        <div class="choice-card-header">
-                            <div class="choice-icon-wrap">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <!-- Card 2: Chat -->
+                        <div class="action-card" onclick="launchChatMode()">
+                            <div class="card-icon-pill">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                                 </svg>
                             </div>
-                            <span class="choice-badge">Zero-Cost Gateway</span>
+                            <h3 class="card-title">Chat</h3>
+                            <p class="card-desc">Ask questions, research, summarize, or brainstorm.</p>
                         </div>
-                        <h2 class="choice-title">ChatBot & Cost Autopilot</h2>
-                        <p class="choice-desc">
-                            Dynamic complexity routing across Google Gemini, Groq, and Hugging Face with sub-millisecond ML tier classification.
-                        </p>
-                        <div class="choice-action">
-                            <span class="choice-link-text">Start LLM Conversation &rarr;</span>
-                        </div>
-                    </div>
 
-                    <!-- Choice 3: Complete Privacy Mode -->
-                    <div class="choice-card choice-privacy" onclick="activatePrivacyAndLaunch()">
-                        <div class="choice-card-header">
-                            <div class="choice-icon-wrap">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        <!-- Card 3: Build Workflow -->
+                        <div class="action-card" onclick="launchWorkflowMode()">
+                            <div class="card-icon-pill">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="18" cy="5" r="3"></circle>
+                                    <circle cx="6" cy="12" r="3"></circle>
+                                    <circle cx="18" cy="19" r="3"></circle>
+                                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
                                 </svg>
                             </div>
-                            <span class="choice-badge badge-privacy">Air-Gapped Local</span>
-                        </div>
-                        <h2 class="choice-title">Complete Privacy Mode</h2>
-                        <p class="choice-desc">
-                            100% offline local execution via Ollama. All cloud API requests are intercepted and blocked. Zero data leaves your computer.
-                        </p>
-                        <div class="choice-action">
-                            <span class="choice-link-text">Activate Offline Mode &rarr;</span>
+                            <h3 class="card-title">Build Workflow</h3>
+                            <p class="card-desc">Chain multiple models and automate tasks.</p>
                         </div>
                     </div>
-                </div>
 
-                <!-- Unified Quick-Prompt Box (GitHub Copilot / Agno Style) -->
-                <div class="quick-prompt-container">
-                    <form class="quick-prompt-box" id="quick-prompt-form" onsubmit="handleQuickPromptSubmit(event)">
-                        <textarea
-                            id="quick-prompt-input"
-                            class="quick-prompt-textarea"
-                            rows="2"
-                            placeholder="Ask anything, describe a coding task, or test prompt token compression..."
-                            onkeydown="handleQuickPromptKeyDown(event)"
-                        ></textarea>
+                    <!-- Chat Composer (Command Bar) -->
+                    <div class="composer-container">
+                        <form class="composer-bar" id="main-composer-form" onsubmit="handleComposerSubmit(event)">
+                            <button type="button" class="attach-btn" title="Attach file or project context" onclick="triggerFileUpload()">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                                </svg>
+                            </button>
+                            <input type="file" id="file-upload-input" style="display: none;" onchange="handleFileAttached(event)">
 
-                        <div class="quick-prompt-toolbar">
-                            <div class="quick-toolbar-left">
-                                <div class="quick-select-item">
-                                    <label for="quick-mode-select">Target:</label>
-                                    <select id="quick-mode-select" class="select-control-sm">
-                                        <option value="chat">LLM Chat Gateway</option>
-                                        <option value="coding">Coding Agent DAG</option>
-                                        <option value="quota-chain">Automatic Quota Rollover Chain</option>
-                                    </select>
-                                </div>
+                            <input
+                                type="text"
+                                id="composer-text-input"
+                                class="composer-input"
+                                placeholder="Type your message here..."
+                                autocomplete="off"
+                            />
 
-                                <div class="quick-select-item">
-                                    <label for="quick-compress-select">Compression:</label>
-                                    <select id="quick-compress-select" class="select-control-sm">
-                                        <option value="balanced">Balanced (-50% tokens)</option>
-                                        <option value="mild">Mild (Whitespace & Fluff)</option>
-                                        <option value="aggressive">Aggressive (-80% tokens)</option>
-                                        <option value="none">Off (Raw prompt)</option>
-                                    </select>
-                                </div>
+                            <div class="model-selector-pill" id="composer-model-pill" onclick="openModal('modal-model-select')">
+                                <span class="model-star">✦</span>
+                                <span id="composer-model-label">Auto (Best Model)</span>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
                             </div>
 
-                            <button type="submit" class="btn btn-primary btn-sm" id="btn-quick-run">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <button type="submit" class="btn-send" id="btn-composer-submit" title="Send message">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                                     <line x1="22" y1="2" x2="11" y2="13"></line>
                                     <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                                 </svg>
-                                <span>Run Prompt</span>
+                            </button>
+                        </form>
+
+                        <!-- Exactly Three Subtle Suggestion Chips -->
+                        <div class="suggestions-row">
+                            <button type="button" class="suggestion-pill" onclick="fillAndSendSuggestion('Summarize this paper')">
+                                <span>Summarize this paper</span>
+                                <span>&rarr;</span>
+                            </button>
+                            <button type="button" class="suggestion-pill" onclick="fillAndSendSuggestion('Explain this code')">
+                                <span>Explain this code</span>
+                                <span>&rarr;</span>
+                            </button>
+                            <button type="button" class="suggestion-pill" onclick="fillAndSendSuggestion('Help me plan a project')">
+                                <span>Help me plan a project</span>
+                                <span>&rarr;</span>
                             </button>
                         </div>
-                    </form>
-
-                    <!-- Quick Run Result Card (Rendered on submit) -->
-                    <div class="quick-result-card" id="quick-result-card" style="display: none;">
-                        <div class="quick-result-header">
-                            <div class="quick-result-meta">
-                                <span class="tag-meta" id="qr-provider-model">Model</span>
-                                <span class="tag-meta" id="qr-tier">Tier</span>
-                                <span class="tag-meta" id="qr-tokens">Tokens</span>
-                                <span class="tag-meta tag-success" id="qr-savings">Savings</span>
-                            </div>
-                            <button class="btn-tool" onclick="closeQuickResult()">&times;</button>
-                        </div>
-                        <div class="quick-result-body markdown-content" id="qr-text"></div>
-                    </div>
-                </div>
-
-                <!-- On Your Radar / System Telemetry Cards -->
-                <div class="radar-section">
-                    <div class="radar-header-row">
-                        <span class="radar-section-title">ACTIVE ARCHITECTURE & TELEMETRY</span>
                     </div>
 
-                    <div class="radar-grid">
-                        <!-- Card 1: Automatic Quota Rollover Chain -->
-                        <div class="radar-card">
-                            <div class="radar-card-top">
-                                <span class="radar-label">QUOTA ROLLOVER CHAIN</span>
-                                <span class="radar-status-dot online"></span>
-                            </div>
-                            <div class="radar-val">Groq &rarr; Gemini &rarr; HF &rarr; Ollama</div>
-                            <div class="radar-sub">Automatic rollover on 429 quota exhaustion. Never interrupts coding sessions.</div>
-                        </div>
-
-                        <!-- Card 2: Prompt Vault SQLite Database -->
-                        <div class="radar-card" onclick="switchMainSection('vault')" style="cursor: pointer;">
-                            <div class="radar-card-top">
-                                <span class="radar-label">PROMPT VAULT SQLITE DB</span>
-                                <span class="radar-tag">data/prompt_vault.sqlite3</span>
-                            </div>
-                            <div class="radar-val" id="radar-vault-count">0 Prompts Stored</div>
-                            <div class="radar-sub">Persistent ledger of all prompts, compression savings, and training-ready datasets.</div>
-                        </div>
-
-                        <!-- Card 3: Prompt Token Compressor -->
-                        <div class="radar-card">
-                            <div class="radar-card-top">
-                                <span class="radar-label">TOKEN COMPRESSION SAVINGS</span>
-                                <span class="radar-tag" id="radar-comp-pct">Up to 80%</span>
-                            </div>
-                            <div class="radar-val" id="radar-tokens-saved">0 Tokens Saved</div>
-                            <div class="radar-sub">Lexical condensation & boilerplate pruning before dispatch to models.</div>
-                        </div>
-
-                        <!-- Card 4: Supervised GBDT Classifier -->
-                        <div class="radar-card" onclick="switchMainSection('analytics')" style="cursor: pointer;">
-                            <div class="radar-card-top">
-                                <span class="radar-label">ML ROUTER CLASSIFIER</span>
-                                <span class="radar-tag">XGBoost / GBDT</span>
-                            </div>
-                            <div class="radar-val" id="radar-classifier-acc">92.8% Accuracy</div>
-                            <div class="radar-sub">Trained on 1,252 R2-Bench, synthetic, and live observations with &lt;1ms inference.</div>
-                        </div>
-                    </div>
                 </div>
             </div>
-        </main>
 
-        <!-- ============================================================= -->
-        <!-- SECTION 1: LLM CHAT WORKSPACE                                 -->
-        <!-- ============================================================= -->
-        <main class="workspace-section" id="section-chat">
-            <div class="chat-layout">
-                <!-- Chat History Sidebar -->
-                <aside class="chat-sidebar">
-                    <div class="sidebar-top">
-                        <button class="btn btn-primary btn-block" onclick="startNewChat()">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
-                            <span>New Conversation</span>
-                        </button>
+            <!-- VIEW B: ACTIVE CHAT CONVERSATION VIEW -->
+            <div class="secondary-view" id="view-active-chat">
+                <div class="active-chat-view">
+                    <div class="chat-messages-scroll" id="chat-messages-container">
+                        <!-- Messages dynamically added here -->
                     </div>
 
-                    <div class="chat-session-list" id="chat-session-list">
-                        <div class="session-item active">Current Session</div>
-                    </div>
-
-                    <div class="sidebar-footer">
-                        <div class="classifier-status-box" id="classifier-info">
-                            <div class="status-row">
-                                <span class="status-label">Engine:</span>
-                                <span class="status-val" id="ml-status-text">XGBoost / GBDT Active</span>
+                    <!-- Bottom Fixed Composer in Chat View -->
+                    <div class="composer-container" style="margin-top: auto;">
+                        <form class="composer-bar" onsubmit="handleChatViewSubmit(event)">
+                            <button type="button" class="attach-btn" title="Attach file or context" onclick="triggerFileUpload()">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                                </svg>
+                            </button>
+                            <input
+                                type="text"
+                                id="chatview-text-input"
+                                class="composer-input"
+                                placeholder="Type your message here..."
+                                autocomplete="off"
+                            />
+                            <div class="model-selector-pill" onclick="openModal('modal-model-select')">
+                                <span class="model-star">✦</span>
+                                <span id="chatview-model-label">Auto (Best Model)</span>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
                             </div>
-                            <div class="status-row">
-                                <span class="status-label">RAG Chunks:</span>
-                                <span class="status-val" id="rag-chunks-count">0 chunks</span>
-                            </div>
-                        </div>
-                    </div>
-                </aside>
-
-                <!-- Chat Main Stream -->
-                <section class="chat-main">
-                    <div class="chat-toolbar">
-                        <div class="toolbar-left">
-                            <label for="chat-model-select" class="control-label">Model Route:</label>
-                            <select id="chat-model-select" class="select-control">
-                                <option value="auto">Auto Cost Autopilot (3-Tier Matrix)</option>
-                                <optgroup label="Free Cloud Tiers">
-                                    <option value="gemini:gemini-3.8-flash">Google Gemini 3.8 Flash</option>
-                                    <option value="groq:openai/gpt-oss-20b">Groq GPT-OSS 20B (Tier 1)</option>
-                                    <option value="groq:qwen/qwen3-32b">Groq Qwen3 32B (Tier 2)</option>
-                                    <option value="huggingface:meta-llama/Llama-3.3-70B-Instruct">Hugging Face Llama 3.3 70B (Frontier / Free)</option>
-                                    <option value="huggingface:Qwen/Qwen2.5-Coder-32B-Instruct">Hugging Face Qwen 2.5 Coder 32B (Coding / Free)</option>
-                                    <option value="huggingface:deepseek-ai/DeepSeek-R1-Distill-Qwen-32B">Hugging Face DeepSeek R1 Distill 32B (Free)</option>
-                                    <option value="huggingface:meta-llama/Llama-3.1-8B-Instruct">Hugging Face Llama 3.1 8B (Fast / Free)</option>
-                                    <option value="huggingface:mistralai/Mistral-7B-Instruct-v0.3">Hugging Face Mistral 7B (Fast / Free)</option>
-                                    <option value="huggingface:google/gemma-2-9b-it">Hugging Face Gemma 2 9B (Fast / Free)</option>
-                                    <option value="openrouter:deepseek/deepseek-r1">OpenRouter DeepSeek R1</option>
-                                </optgroup>
-                                <optgroup label="Frontier Commercial">
-                                    <option value="openai:gpt-4o-mini">OpenAI GPT-4o Mini</option>
-                                    <option value="openai:gpt-4o">OpenAI GPT-4o</option>
-                                </optgroup>
-                                <optgroup label="Local Offline (Ollama)">
-                                    <option value="ollama:qwen2.5:1.5b">Ollama Qwen 2.5 1.5B (Fast)</option>
-                                    <option value="ollama:llama3.1:8b-instruct-q4_K_M">Ollama Llama 3.1 8B (Balanced)</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                        <div class="toolbar-right">
-                            <label class="checkbox-inline">
-                                <input type="checkbox" id="chat-rag-toggle" checked>
-                                <span>Inject RAG Context</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Messages Container -->
-                    <div class="messages-container" id="chat-messages">
-                        <div class="chat-welcome">
-                            <h2>LLM Chat & Cost Autopilot</h2>
-                            <p>Every query is analyzed for semantic complexity and routed to the most cost-effective model tier.</p>
-                            <div class="prompt-suggestions">
-                                <button class="suggestion-chip" onclick="setChatInput('Write a Python function to parse and validate semantic version strings')">Python SemVer Validator</button>
-                                <button class="suggestion-chip" onclick="setChatInput('Correct the grammar in the sentence: She do not likes to code in Python.')">Grammar Proofreading (Tier 1)</button>
-                                <button class="suggestion-chip" onclick="setChatInput('Explain how distributed consensus works in Raft and compare with Paxos')">Distributed Consensus (Tier 3)</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Input Box -->
-                    <div class="chat-input-area">
-                        <form id="chat-form" onsubmit="handleChatSubmit(event)">
-                            <div class="input-wrapper">
-                                <textarea id="chat-input" rows="2" placeholder="Send a message or instruction..." onkeydown="handleChatKeyDown(event)"></textarea>
-                                <button type="submit" class="btn btn-primary btn-icon" id="btn-chat-send" title="Send Message">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="22" y1="2" x2="11" y2="13"></line>
-                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                                    </svg>
-                                </button>
-                            </div>
+                            <button type="submit" class="btn-send" id="btn-chatview-submit" title="Send message">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                </svg>
+                            </button>
                         </form>
                     </div>
-                </section>
+                </div>
             </div>
+
+            <!-- VIEW C: MY FILES / CODING AGENT WORKSPACE -->
+            <div class="secondary-view" id="view-files">
+                <div class="view-header">
+                    <div class="view-title-group">
+                        <h2>My Files & Project Explorer</h2>
+                        <p>Browse workspace directory, review code, and trigger coding agents.</p>
+                    </div>
+                    <div class="view-actions">
+                        <button class="btn-secondary" onclick="refreshWorkspaceFiles()">Refresh Tree</button>
+                        <button class="btn-primary-action" onclick="saveActiveFile()">Save File</button>
+                    </div>
+                </div>
+
+                <div class="files-workspace-grid">
+                    <div class="files-tree-panel" id="project-file-tree">
+                        <div class="file-tree-node">Loading workspace files...</div>
+                    </div>
+
+                    <div class="editor-panel">
+                        <div class="editor-top-bar">
+                            <span id="editor-active-filename">server/app/main.py</span>
+                            <span style="font-size: 11px; color: var(--text-muted);">UTF-8</span>
+                        </div>
+                        <textarea class="code-editor-area" id="ide-code-editor" spellcheck="false" placeholder="Select a file from the explorer on the left..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW D: WORKFLOWS / MULTI-AGENT DAG -->
+            <div class="secondary-view" id="view-workflows">
+                <div class="view-header">
+                    <div class="view-title-group">
+                        <h2>Multi-Agent Workflow Orchestrator</h2>
+                        <p>Chain specialized agents across models with DAG task decomposition and human verification.</p>
+                    </div>
+                    <div class="view-actions">
+                        <span class="badge-free" id="wf-live-badge">SYSTEM IDLE</span>
+                    </div>
+                </div>
+
+                <div class="composer-container" style="max-width: 100%; margin-bottom: 20px;">
+                    <form class="composer-bar" onsubmit="dispatchWorkflowPrompt(event)">
+                        <input
+                            type="text"
+                            id="workflow-prompt-input"
+                            class="composer-input"
+                            placeholder="Describe engineering feature or task to decompose across agents..."
+                        />
+                        <button type="submit" class="btn-primary-action" id="btn-wf-dispatch">
+                            <span>Dispatch Agents</span>
+                        </button>
+                    </form>
+                </div>
+
+                <div class="editor-panel" style="flex: 1; padding: 18px;">
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">Execution Task Graph</div>
+                    <div id="wf-task-graph-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+                        <div style="color: var(--text-muted); font-size: 12.5px;">Enter an engineering goal above to decompose into specialist tasks.</div>
+                    </div>
+
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--text-primary);">Agent Synthesis Console</div>
+                    <div class="code-editor-area" id="wf-console-live" style="background-color: var(--pill-bg); border-radius: 10px; height: 180px; overflow-y: auto; font-size: 12px;">
+                        Ready for agent orchestration.
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW E: MODELS MATRIX & TIERS -->
+            <div class="secondary-view" id="view-models">
+                <div class="view-header">
+                    <div class="view-title-group">
+                        <h2>Models & Intelligent Routing Matrix</h2>
+                        <p>Dynamic 3-tier classification routing across free and frontier models with sub-millisecond inference.</p>
+                    </div>
+                </div>
+
+                <table class="models-matrix-table">
+                    <thead>
+                        <tr>
+                            <th>Model Name</th>
+                            <th>Provider</th>
+                            <th>Tier Level</th>
+                            <th>Cost / 1k Tokens</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Google Gemini 3.8 Flash</strong></td>
+                            <td>Google Gemini</td>
+                            <td>Tier 1 (Fast & Light)</td>
+                            <td><span class="badge-free">100% Free (15 RPM)</span></td>
+                            <td><span style="color: var(--color-success);">● Online</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Groq GPT-OSS 20B</strong></td>
+                            <td>Groq Cloud LPU</td>
+                            <td>Tier 1 (Ultra Fast)</td>
+                            <td><span class="badge-free">100% Free (30 RPM)</span></td>
+                            <td><span style="color: var(--color-success);">● Online</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Groq Qwen3 32B</strong></td>
+                            <td>Groq Cloud LPU</td>
+                            <td>Tier 2 (Balanced)</td>
+                            <td><span class="badge-free">100% Free (30 RPM)</span></td>
+                            <td><span style="color: var(--color-success);">● Online</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Hugging Face Llama 3.3 70B</strong></td>
+                            <td>Hugging Face Router</td>
+                            <td>Tier 3 (Frontier)</td>
+                            <td><span class="badge-free">Serverless Free</span></td>
+                            <td><span style="color: var(--accent-dark);">● Configured</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Hugging Face Qwen 2.5 Coder 32B</strong></td>
+                            <td>Hugging Face Router</td>
+                            <td>Tier 2 (Coding)</td>
+                            <td><span class="badge-free">Serverless Free</span></td>
+                            <td><span style="color: var(--accent-dark);">● Configured</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Local Ollama (Qwen 2.5 1.5B)</strong></td>
+                            <td>Local Ollama Daemon</td>
+                            <td>Tier 1 (Air-Gapped)</td>
+                            <td><span class="badge-free">100% Free (Offline)</span></td>
+                            <td><span style="color: var(--color-success);">● Online</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
         </main>
 
         <!-- ============================================================= -->
-        <!-- SECTION 2: CODING AGENT WORKSPACE                             -->
+        <!-- COLUMN 3: RIGHT SIDEBAR (MODEL, TOOLS, SETTINGS)             -->
         <!-- ============================================================= -->
-        <main class="workspace-section" id="section-coding">
-            <div class="ide-layout">
-                <!-- Left: File Explorer & RAG Tree -->
-                <aside class="ide-explorer">
-                    <div class="panel-header">
-                        <span class="panel-title">WORKSPACE FILES</span>
-                        <button class="btn-tool" onclick="refreshWorkspaceFiles()" title="Refresh file list">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M23 4v6h-6"></path>
-                                <path d="M1 20v-6h6"></path>
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="file-tree" id="file-tree-list">
-                        <div class="empty-hint">Loading files...</div>
-                    </div>
+        <aside class="sidebar-right">
+            <!-- Top Controls Row -->
+            <div class="top-controls-row">
+                <!-- Theme Toggle Button (Dark / Light) -->
+                <button class="icon-ctrl-btn" id="btn-theme-toggle" onclick="toggleTheme()" title="Switch Light/Dark Mode">
+                    <!-- Sun/Moon icon toggle -->
+                    <svg id="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
 
-                    <!-- Pareto Summary -->
-                    <div class="panel-header mt-auto">
-                        <span class="panel-title">COST / QUALITY PARETO</span>
-                    </div>
-                    <div class="ide-pareto-wrap">
-                        <canvas id="pareto-chart" width="260" height="130"></canvas>
-                        <div class="pareto-caption" id="pareto-summary">No workflow runs yet</div>
-                    </div>
-                </aside>
+                <!-- Notifications Button -->
+                <button class="icon-ctrl-btn" id="btn-notifications" onclick="openModal('modal-notifications')" title="System Notifications">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <span class="notif-badge-dot"></span>
+                </button>
 
-                <!-- Center: Code Editor & Workflow Prompt -->
-                <section class="ide-center">
-                    <div class="editor-header">
-                        <div class="editor-tabs" id="editor-tabs">
-                            <div class="tab-item active" id="active-file-tab">main.py</div>
-                        </div>
-                        <div class="editor-actions">
-                            <button class="btn btn-secondary btn-xs" onclick="saveActiveFile()">Save File</button>
-                        </div>
-                    </div>
-                    <div class="editor-body">
-                        <textarea id="code-editor" class="code-editor" spellcheck="false" placeholder="Select a file from the left to view or edit..."></textarea>
-                    </div>
-
-                    <!-- Workflow Task Input Dock -->
-                    <div class="ide-dock">
-                        <div class="dock-header">
-                            <span class="dock-label">Agent Orchestration Goal</span>
-                            <div class="dock-options">
-                                <label class="checkbox-inline">
-                                    <input type="checkbox" id="wf-parallel-toggle" checked>
-                                    <span>Parallel Specialist Execution</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="dock-input-row">
-                            <textarea id="wf-prompt-input" rows="2" placeholder="Describe the engineering feature or system for the agent team to build..."></textarea>
-                            <button class="btn btn-primary" id="btn-wf-run" onclick="dispatchWorkflow()">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                                </svg>
-                                <span>Dispatch Agents</span>
-                            </button>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Right: Multi-Agent Execution Graph & Review -->
-                <aside class="ide-workflow">
-                    <div class="panel-header">
-                        <span class="panel-title">MULTI-AGENT EXECUTION GRAPH</span>
-                        <span class="status-badge" id="wf-status-badge">IDLE</span>
-                    </div>
-
-                    <div class="workflow-dag" id="wf-task-list">
-                        <div class="empty-hint">Enter an engineering goal in the center dock to decompose into specialist tasks.</div>
-                    </div>
-
-                    <!-- Human In The Loop Review Panel -->
-                    <div class="hitl-panel" id="hitl-panel" style="display: none;">
-                        <div class="hitl-header">
-                            <span class="hitl-title">Human Verification Required</span>
-                        </div>
-                        <p class="hitl-desc">Review confidence score is below threshold. Inspect generated artifacts before approval.</p>
-                        <div class="hitl-buttons">
-                            <button class="btn btn-success btn-sm" id="btn-approve" onclick="approveHITL()">Approve</button>
-                            <button class="btn btn-danger btn-sm" id="btn-reject" onclick="rejectHITL()">Reject</button>
-                        </div>
-                    </div>
-
-                    <!-- Output Console & Ledger -->
-                    <div class="panel-header">
-                        <span class="panel-title">SYNTHESIS & OUTPUT</span>
-                    </div>
-                    <div class="ide-console" id="wf-console-output">
-                        <div class="empty-hint">Agent outputs and reviewer synthesis will appear here.</div>
-                    </div>
-                </aside>
+                <!-- Menu / Drawer Button -->
+                <button class="icon-ctrl-btn" id="btn-menu" onclick="openModal('modal-settings')" title="Quick Menu">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
             </div>
-        </main>
 
-        <!-- ============================================================= -->
-        <!-- SECTION 3: ROUTER PERFORMANCE ANALYTICS                       -->
-        <!-- ============================================================= -->
-        <main class="workspace-section" id="section-analytics">
-            <div class="analytics-layout">
-                <div class="analytics-header-row">
-                    <h2 class="analytics-title">Router Performance Analytics</h2>
-                    <div class="analytics-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="loadRouterAnalytics()" title="Refresh Analytics Data">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M23 4v6h-6"></path>
-                                <path d="M1 20v-6h6"></path>
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                            </svg>
-                            <span>Refresh</span>
-                        </button>
-                        <button class="btn btn-primary btn-sm" id="btn-retrain" onclick="retrainClassifier()" title="Retrain XGBoost Classifier">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="3"></circle>
-                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06c.5.5 1.21.67 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.5.5-.67 1.21-.33 1.82V9c.26.604.852 1 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                            </svg>
-                            <span>Retrain Classifier</span>
-                        </button>
+            <!-- Exactly Three Right Sidebar Sections -->
+            <div class="right-cards-col">
+                <!-- Section 1: Model -->
+                <div class="right-card-row" onclick="openModal('modal-model-select')">
+                    <div class="right-card-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                            <polyline points="2 17 12 22 22 17"></polyline>
+                            <polyline points="2 12 12 17 22 12"></polyline>
+                        </svg>
                     </div>
+                    <div class="right-card-text">
+                        <div class="right-card-title">Model</div>
+                        <div class="right-card-sub" id="right-panel-model-label">Auto (Best Model)</div>
+                    </div>
+                    <div class="right-card-arrow">&gt;</div>
                 </div>
 
-                <!-- Summary Cards -->
-                <div class="analytics-summary-row" id="analytics-summary">
-                    <div class="summary-card">
-                        <span class="card-label">Total Observations</span>
-                        <span class="card-val" id="an-total-obs">0</span>
+                <!-- Section 2: Tools -->
+                <div class="right-card-row" onclick="openModal('modal-tools')">
+                    <div class="right-card-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                        </svg>
                     </div>
-                    <div class="summary-card">
-                        <span class="card-label">User Feedback</span>
-                        <span class="card-val" id="an-total-feedback">0</span>
+                    <div class="right-card-text">
+                        <div class="right-card-title">Tools</div>
+                        <div class="right-card-sub">Web Search, RAG, Code, Image...</div>
                     </div>
-                    <div class="summary-card">
-                        <span class="card-label">Training Ready</span>
-                        <span class="card-val" id="an-train-ready">No</span>
-                    </div>
-                    <div class="summary-card">
-                        <span class="card-label">Classifier Engine</span>
-                        <span class="card-val" id="an-classifier-engine">Heuristics</span>
-                    </div>
-                    <div class="summary-card">
-                        <span class="card-label">Benchmark Rows</span>
-                        <span class="card-val" id="an-bench-rows">0</span>
-                    </div>
-                    <div class="summary-card">
-                        <span class="card-label">Model Accuracy</span>
-                        <span class="card-val" id="an-accuracy">N/A</span>
-                    </div>
+                    <div class="right-card-arrow">&gt;</div>
                 </div>
 
-                <!-- Model Performance Table -->
-                <div class="analytics-panel">
-                    <div class="panel-header">
-                        <span class="panel-title">MODEL PERFORMANCE MATRIX</span>
+                <!-- Section 3: Settings -->
+                <div class="right-card-row" onclick="openModal('modal-settings')">
+                    <div class="right-card-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06c.5.5 1.21.67 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.5.5-.67 1.21-.33 1.82V9c.26.604.852 1 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
                     </div>
-                    <div class="analytics-table-wrap">
-                        <table class="analytics-table" id="model-perf-table">
-                            <thead>
-                                <tr>
-                                    <th>Model</th>
-                                    <th>Requests</th>
-                                    <th>Avg Latency</th>
-                                    <th>Total Tokens</th>
-                                    <th>Total Cost</th>
-                                    <th>Error Rate</th>
-                                    <th>Avg Rating</th>
-                                    <th>Last Used</th>
-                                </tr>
-                            </thead>
-                            <tbody id="model-perf-tbody">
-                                <tr><td colspan="8" class="empty-hint">No observations yet. Send prompts to start collecting data.</td></tr>
-                            </tbody>
-                        </table>
+                    <div class="right-card-text">
+                        <div class="right-card-title">Settings</div>
+                        <div class="right-card-sub">Configuration & Preferences</div>
                     </div>
-                </div>
-
-                <div class="analytics-two-col">
-                    <!-- Benchmark Status -->
-                    <div class="analytics-panel">
-                        <div class="panel-header">
-                            <span class="panel-title">HUGGINGFACE BENCHMARK STATUS</span>
-                        </div>
-                        <div class="benchmark-info" id="benchmark-info">
-                            <div class="bench-row"><span class="bench-label">Loaded:</span><span id="bench-loaded">No</span></div>
-                            <div class="bench-row"><span class="bench-label">Dataset Rows:</span><span id="bench-dataset-rows">0</span></div>
-                            <div class="bench-row"><span class="bench-label">Last Calibrated:</span><span id="bench-last-cal">Never</span></div>
-                            <div class="bench-row"><span class="bench-label">Sources:</span><span id="bench-sources">None</span></div>
-                        </div>
-                    </div>
-
-                    <!-- Training Report -->
-                    <div class="analytics-panel">
-                        <div class="panel-header">
-                            <span class="panel-title">LATEST TRAINING REPORT</span>
-                        </div>
-                        <div class="training-report" id="training-report">
-                            <div class="bench-row"><span class="bench-label">Engine:</span><span id="tr-engine">N/A</span></div>
-                            <div class="bench-row"><span class="bench-label">Samples:</span><span id="tr-samples">0</span></div>
-                            <div class="bench-row"><span class="bench-label">Accuracy:</span><span id="tr-accuracy">N/A</span></div>
-                            <div class="bench-row"><span class="bench-label">Tier 1 F1:</span><span id="tr-f1-t1">N/A</span></div>
-                            <div class="bench-row"><span class="bench-label">Tier 2 F1:</span><span id="tr-f1-t2">N/A</span></div>
-                            <div class="bench-row"><span class="bench-label">Tier 3 F1:</span><span id="tr-f1-t3">N/A</span></div>
-                            <div class="bench-row"><span class="bench-label">Duration:</span><span id="tr-duration">N/A</span></div>
-                            <div class="bench-row"><span class="bench-label">Trained At:</span><span id="tr-trained-at">N/A</span></div>
-                        </div>
-                    </div>
+                    <div class="right-card-arrow">&gt;</div>
                 </div>
             </div>
-        </main>
+        </aside>
 
-        <!-- ============================================================= -->
-        <!-- SECTION 4: PROMPT VAULT SQLITE DATABASE ARCHIVE               -->
-        <!-- ============================================================= -->
-        <main class="workspace-section" id="section-vault">
-            <div class="vault-layout">
-                <div class="vault-header-row">
-                    <div>
-                        <h2 class="vault-title">Prompt Vault SQLite Database</h2>
-                        <p class="vault-desc">All prompt interactions, token compression stats, and routing decisions stored in <code>data/prompt_vault.sqlite3</code>.</p>
-                    </div>
-                    <div class="vault-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="loadPromptVault()" title="Refresh Prompt Vault Data">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M23 4v6h-6"></path>
-                                <path d="M1 20v-6h6"></path>
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                            </svg>
-                            <span>Refresh</span>
-                        </button>
-                        <button class="btn btn-primary btn-sm" onclick="exportVaultDataset()" title="Export JSONL dataset for fine-tuning or ML training">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                            <span>Export Dataset</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Vault Telemetry Cards -->
-                <div class="analytics-summary-row" id="vault-summary-cards">
-                    <div class="summary-card">
-                        <span class="card-label">Total Prompts</span>
-                        <span class="card-val" id="vault-total-count">0</span>
-                    </div>
-                    <div class="summary-card">
-                        <span class="card-label">Original Tokens</span>
-                        <span class="card-val" id="vault-orig-tokens">0</span>
-                    </div>
-                    <div class="summary-card">
-                        <span class="card-label">Compressed Tokens</span>
-                        <span class="card-val" id="vault-comp-tokens">0</span>
-                    </div>
-                    <div class="summary-card">
-                        <span class="card-label">Tokens Saved</span>
-                        <span class="card-val text-success" id="vault-saved-tokens">0</span>
-                    </div>
-                    <div class="summary-card">
-                        <span class="card-label">Avg Compression</span>
-                        <span class="card-val" id="vault-avg-ratio">1.0</span>
-                    </div>
-                    <div class="summary-card">
-                        <span class="card-label">Training Ready</span>
-                        <span class="card-val" id="vault-train-count">0</span>
-                    </div>
-                </div>
-
-                <!-- Filters & Search -->
-                <div class="vault-filters-bar">
-                    <div class="input-inline" style="flex: 1;">
-                        <input type="text" id="vault-search-input" class="input-control" placeholder="Search stored prompts or responses..." onkeyup="debounceVaultSearch()">
-                    </div>
-                    <select id="vault-tier-filter" class="select-control" onchange="loadPromptVault()">
-                        <option value="">All Tiers</option>
-                        <option value="Tier 1">Tier 1 (Fast / Light)</option>
-                        <option value="Tier 2">Tier 2 (Balanced)</option>
-                        <option value="Tier 3">Tier 3 (Frontier)</option>
-                        <option value="Quota Rollover">Quota Rollover Chain</option>
-                        <option value="Cache">Exact Cache Match</option>
-                    </select>
-                </div>
-
-                <!-- Prompts Table -->
-                <div class="analytics-panel">
-                    <div class="panel-header">
-                        <span class="panel-title">RECORDED PROMPT TRANSACTIONS (SQLITE)</span>
-                    </div>
-                    <div class="analytics-table-wrap">
-                        <table class="analytics-table" id="vault-prompts-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Created</th>
-                                    <th>Prompt</th>
-                                    <th>Compressed</th>
-                                    <th>Tier / Route</th>
-                                    <th>Model & Provider</th>
-                                    <th>Tokens (In / Out)</th>
-                                    <th>Latency</th>
-                                    <th>Rating</th>
-                                </tr>
-                            </thead>
-                            <tbody id="vault-prompts-tbody">
-                                <tr><td colspan="9" class="empty-hint">No stored prompts yet. Send queries to accumulate training samples.</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </main>
-
-        <!-- Footer -->
-        <footer class="app-footer">
-            <div class="footer-left">
-                <span>Agent Orchestrator Platform</span>
-                <span class="separator">|</span>
-                <span>Zero-Cost Execution Matrix</span>
-            </div>
-            <div class="footer-right">
-                <a href="#privacy" onclick="openModal('modal-privacy'); return false;">Privacy Policy</a>
-                <span class="separator">|</span>
-                <a href="#terms" onclick="openModal('modal-terms'); return false;">Terms of Service</a>
-                <span class="separator">|</span>
-                <a href="https://github.com/PrathameshPaigude/LLM-Cost-Autopilot-Agent-Orchestrator" target="_blank" rel="noopener">GitHub Repository</a>
-            </div>
-        </footer>
     </div>
 
     <!-- ============================================================= -->
-    <!-- MODAL 0: SYSTEM & PROVIDER SETTINGS (UNCLUTTERED DRAWER)      -->
+    <!-- MODAL 1: MODEL SELECTION DRAWER                               -->
     <!-- ============================================================= -->
-    <div class="modal-overlay" id="modal-settings" style="display: none;">
-        <div class="modal-container modal-lg">
+    <div class="modal-overlay" id="modal-model-select">
+        <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title">System & Provider Configuration</h3>
-                <button class="modal-close" onclick="closeModal('modal-settings')">&times;</button>
+                <h3>Select Model or Execution Route</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-model-select')">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="settings-group">
-                    <h4 class="settings-group-title">Active AI Model Providers</h4>
-                    <p class="settings-desc">Provider health and dynamic connection matrix. All providers support free-tier limits with auto-failover.</p>
-                    
-                    <div class="provider-grid-cards" id="settings-provider-cards">
-                        <div class="provider-card" id="card-gemini">
-                            <div class="provider-card-top">
-                                <span class="provider-card-name">Google Gemini</span>
-                                <span class="status-indicator" id="ind-gemini"></span>
-                            </div>
-                            <div class="provider-card-detail">Primary: gemini-3.8-flash (15 RPM free)</div>
+                <div class="selection-list">
+                    <div class="selection-option selected" onclick="chooseModel('auto', 'Auto (Best Model)')">
+                        <div class="option-left">
+                            <span class="option-name">✦ Auto (Best Model)</span>
+                            <span class="option-desc">Dynamic 3-tier matrix. Sub-millisecond complexity classifier routes to free tiers.</span>
                         </div>
-
-                        <div class="provider-card" id="card-groq">
-                            <div class="provider-card-top">
-                                <span class="provider-card-name">Groq Cloud</span>
-                                <span class="status-indicator" id="ind-groq"></span>
-                            </div>
-                            <div class="provider-card-detail">Primary: openai/gpt-oss-20b (Ultra-fast LPU)</div>
-                        </div>
-
-                        <div class="provider-card" id="card-huggingface">
-                            <div class="provider-card-top">
-                                <span class="provider-card-name">Hugging Face</span>
-                                <span class="status-indicator" id="ind-huggingface"></span>
-                            </div>
-                            <div class="provider-card-detail">Serverless Hub: Qwen 2.5 Coder 32B</div>
-                        </div>
-
-                        <div class="provider-card" id="card-openrouter">
-                            <div class="provider-card-top">
-                                <span class="provider-card-name">OpenRouter</span>
-                                <span class="status-indicator" id="ind-openrouter"></span>
-                            </div>
-                            <div class="provider-card-detail">Free pool: DeepSeek R1 & Qwen Coder</div>
-                        </div>
-
-                        <div class="provider-card" id="card-openai">
-                            <div class="provider-card-top">
-                                <span class="provider-card-name">OpenAI</span>
-                                <span class="status-indicator" id="ind-openai"></span>
-                            </div>
-                            <div class="provider-card-detail">Frontier: gpt-4o-mini & gpt-4o</div>
-                        </div>
-
-                        <div class="provider-card" id="card-ollama">
-                            <div class="provider-card-top">
-                                <span class="provider-card-name">Local Ollama</span>
-                                <span class="status-indicator online"></span>
-                            </div>
-                            <div class="provider-card-detail">Air-Gapped: qwen2.5:1.5b & llama3.1:8b</div>
-                        </div>
+                        <span class="badge-free">Optimal</span>
                     </div>
-                </div>
 
-                <div class="settings-group mt-3">
-                    <h4 class="settings-group-title">Session Telemetry & Estimated Savings</h4>
-                    <div class="settings-telemetry-row">
-                        <div class="stat-card">
-                            <span class="card-label">Total Cost Saved</span>
-                            <span class="card-val text-success" id="settings-stat-saved">$0.0000</span>
+                    <div class="selection-option" onclick="chooseModel('gemini:gemini-3.8-flash', 'Google Gemini 3.8 Flash')">
+                        <div class="option-left">
+                            <span class="option-name">Google Gemini 3.8 Flash</span>
+                            <span class="option-desc">Frontier speed & multimodal capabilities (15 RPM Free Tier).</span>
                         </div>
-                        <div class="stat-card">
-                            <span class="card-label">Total Tokens</span>
-                            <span class="card-val" id="settings-stat-tokens">0</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="card-label">Compute Energy</span>
-                            <span class="card-val text-accent" id="settings-stat-energy">0.0 J</span>
-                        </div>
+                        <span class="badge-free">Free Cloud</span>
                     </div>
-                </div>
 
-                <div class="settings-group mt-3">
-                    <h4 class="settings-group-title">Subsystem Utilities</h4>
-                    <div class="settings-actions-row">
-                        <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-settings'); openModal('modal-bridge');">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-                                <polyline points="16 6 12 2 8 6"></polyline>
-                                <line x1="12" y1="2" x2="12" y2="15"></line>
-                            </svg>
-                            <span>Open Context Bridge</span>
-                        </button>
-                        <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-settings'); openModal('modal-rag');">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                            </svg>
-                            <span>Manage RAG Index</span>
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="clearCache()">
-                            <span>Clear Exact Cache</span>
-                        </button>
+                    <div class="selection-option" onclick="chooseModel('groq:openai/gpt-oss-20b', 'Groq GPT-OSS 20B')">
+                        <div class="option-left">
+                            <span class="option-name">Groq GPT-OSS 20B</span>
+                            <span class="option-desc">Ultra-fast LPU inference (Tier 1: simple tasks & classification).</span>
+                        </div>
+                        <span class="badge-free">Free LPU</span>
+                    </div>
+
+                    <div class="selection-option" onclick="chooseModel('groq:qwen/qwen3-32b', 'Groq Qwen3 32B')">
+                        <div class="option-left">
+                            <span class="option-name">Groq Qwen3 32B</span>
+                            <span class="option-desc">High-speed reasoning & coding tasks (Tier 2).</span>
+                        </div>
+                        <span class="badge-free">Free LPU</span>
+                    </div>
+
+                    <div class="selection-option" onclick="chooseModel('huggingface:meta-llama/Llama-3.3-70B-Instruct', 'Hugging Face Llama 3.3 70B')">
+                        <div class="option-left">
+                            <span class="option-name">Hugging Face Llama 3.3 70B</span>
+                            <span class="option-desc">Frontier reasoning & deep domain tasks (Tier 3).</span>
+                        </div>
+                        <span class="badge-free">HF Serverless</span>
+                    </div>
+
+                    <div class="selection-option" onclick="chooseModel('huggingface:Qwen/Qwen2.5-Coder-32B-Instruct', 'Hugging Face Qwen 2.5 Coder')">
+                        <div class="option-left">
+                            <span class="option-name">Hugging Face Qwen 2.5 Coder 32B</span>
+                            <span class="option-desc">Dedicated programming & code debugging specialist.</span>
+                        </div>
+                        <span class="badge-free">HF Serverless</span>
+                    </div>
+
+                    <div class="selection-option" onclick="chooseModel('ollama:qwen2.5:1.5b', 'Local Ollama Qwen 2.5 1.5B')">
+                        <div class="option-left">
+                            <span class="option-name">Local Ollama Qwen 2.5 1.5B</span>
+                            <span class="option-desc">100% offline local machine execution. Zero cloud data transmission.</span>
+                        </div>
+                        <span class="badge-free">Offline</span>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-primary" onclick="closeModal('modal-settings')">Done</button>
+                <button class="btn-secondary" onclick="closeModal('modal-model-select')">Close</button>
             </div>
         </div>
     </div>
 
-    <!-- MODAL 1: CONTEXT BRIDGE -->
-    <div class="modal-overlay" id="modal-bridge" style="display: none;">
-        <div class="modal-container">
+    <!-- ============================================================= -->
+    <!-- MODAL 2: TOOLS CONFIGURATION DRAWER                           -->
+    <!-- ============================================================= -->
+    <div class="modal-overlay" id="modal-tools">
+        <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title">Cross-LLM Context Bridge</h3>
-                <button class="modal-close" onclick="closeModal('modal-bridge')">&times;</button>
+                <h3>Autonomous Agent Tools</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-tools')">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="modal-desc">
-                    Seamlessly transfer active conversation state and workspace code to ChatGPT, Google Gemini, Claude, or local tools without losing context or wasting tokens.
+                <div class="tool-toggle-row">
+                    <div>
+                        <div class="option-name">Local Workspace RAG</div>
+                        <div class="option-desc">Injects indexed workspace code snippets into prompts for context.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="tool-rag-toggle" checked onchange="toggleRAG(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="tool-toggle-row">
+                    <div>
+                        <div class="option-name">Automatic Quota Rollover Chain</div>
+                        <div class="option-desc">Auto fails over (Groq &rarr; Gemini &rarr; HF &rarr; Ollama) on rate limits.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="tool-chain-toggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="tool-toggle-row">
+                    <div>
+                        <div class="option-name">Token Compression Engine</div>
+                        <div class="option-desc">Saves up to 80% prompt tokens by removing lexical redundancy.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="tool-compression-toggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="tool-toggle-row">
+                    <div>
+                        <div class="option-name">Air-Gapped Privacy Mode</div>
+                        <div class="option-desc">Forces 100% local execution via Ollama. All cloud API requests blocked.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="tool-privacy-toggle" onchange="togglePrivacyModeUI(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div style="margin-top: 10px; display: flex; gap: 10px;">
+                    <button class="btn-secondary" style="flex: 1;" onclick="closeModal('modal-tools'); openModal('modal-rag');">Manage RAG Index</button>
+                    <button class="btn-secondary" style="flex: 1;" onclick="closeModal('modal-tools'); openModal('modal-bridge');">Context Bridge</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('modal-tools')">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================= -->
+    <!-- MODAL 3: SETTINGS & PROVIDER HEALTH DRAWER                    -->
+    <!-- ============================================================= -->
+    <div class="modal-overlay" id="modal-settings">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Settings & Provider Matrix</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-settings')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div>
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">Provider Connection Status</div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div class="tool-toggle-row">
+                            <span>Google Gemini</span>
+                            <span class="badge-free" id="ind-gemini" style="color: var(--color-success);">ONLINE</span>
+                        </div>
+                        <div class="tool-toggle-row">
+                            <span>Groq Cloud LPU</span>
+                            <span class="badge-free" id="ind-groq" style="color: var(--color-success);">ONLINE</span>
+                        </div>
+                        <div class="tool-toggle-row">
+                            <span>Hugging Face Hub</span>
+                            <span class="badge-free" id="ind-huggingface">CONFIGURED</span>
+                        </div>
+                        <div class="tool-toggle-row">
+                            <span>Local Ollama</span>
+                            <span class="badge-free" id="ind-ollama" style="color: var(--color-success);">ONLINE</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 10px;">
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">Cost & Token Telemetry</div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <div style="background-color: var(--bg-card-hover); padding: 12px; border-radius: 10px; border: 1px solid var(--border-color);">
+                            <div style="font-size: 11px; color: var(--text-muted);">Saved</div>
+                            <div style="font-size: 15px; font-weight: 700; color: var(--color-success);" id="settings-stat-saved">$0.0000</div>
+                        </div>
+                        <div style="background-color: var(--bg-card-hover); padding: 12px; border-radius: 10px; border: 1px solid var(--border-color);">
+                            <div style="font-size: 11px; color: var(--text-muted);">Tokens</div>
+                            <div style="font-size: 15px; font-weight: 700; color: var(--text-primary);" id="settings-stat-tokens">0</div>
+                        </div>
+                        <div style="background-color: var(--bg-card-hover); padding: 12px; border-radius: 10px; border: 1px solid var(--border-color);">
+                            <div style="font-size: 11px; color: var(--text-muted);">Energy</div>
+                            <div style="font-size: 15px; font-weight: 700; color: var(--accent-dark);" id="settings-stat-energy">0.0 J</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 10px; display: flex; gap: 10px;">
+                    <button class="btn-secondary" style="flex: 1;" onclick="clearCache()">Clear Cache</button>
+                    <button class="btn-secondary" style="flex: 1;" onclick="exportVaultDataset()">Export Prompt Vault</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('modal-settings')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================= -->
+    <!-- MODAL 4: SYSTEM NOTIFICATIONS POPUP                           -->
+    <!-- ============================================================= -->
+    <div class="modal-overlay" id="modal-notifications">
+        <div class="modal-content" style="max-width: 440px;">
+            <div class="modal-header">
+                <h3>Notifications</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-notifications')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="padding: 10px 14px; background-color: var(--bg-card-hover); border-radius: 10px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">Automatic Quota Rollover Active</div>
+                        <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 2px;">Failover sequence: Groq &rarr; Gemini &rarr; HF &rarr; Ollama enabled.</div>
+                    </div>
+                    <div style="padding: 10px 14px; background-color: var(--bg-card-hover); border-radius: 10px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">Hugging Face Token Configured</div>
+                        <div style="font-size: 11.5px; color: var(--text-secondary); margin-top: 2px;">User authenticated as PrathameshPaigude.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('modal-notifications')">Dismiss All</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 5: CONTEXT BRIDGE -->
+    <div class="modal-overlay" id="modal-bridge">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Cross-LLM Context Bridge</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-bridge')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 12.5px; color: var(--text-secondary);">
+                    Seamlessly transfer active conversation state and code to ChatGPT, Google Gemini, Claude, or local tools without losing context.
                 </p>
-                <div class="form-group">
-                    <label for="bridge-platform">Target Destination Platform:</label>
-                    <select id="bridge-platform" class="select-control" onchange="generateBridgePrompt()">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <label style="font-size: 12px; font-weight: 600;">Target Platform:</label>
+                    <select id="bridge-platform" style="padding: 8px; border-radius: 8px; background-color: var(--bg-card-hover); border: 1px solid var(--border-color); color: var(--text-primary);" onchange="generateBridgePrompt()">
                         <option value="chatgpt">ChatGPT (OpenAI)</option>
                         <option value="gemini">Google Gemini</option>
                         <option value="claude">Claude (Anthropic)</option>
                         <option value="ollama">Local Ollama / Universal</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="bridge-output">Generated Transfer Prompt:</label>
-                    <textarea id="bridge-output" class="code-textarea" rows="8" readonly></textarea>
-                </div>
+                <textarea id="bridge-output" style="width: 100%; height: 140px; background-color: var(--pill-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; color: var(--text-primary); font-family: 'Fira Code', monospace; font-size: 12px;" readonly></textarea>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('modal-bridge')">Close</button>
-                <button class="btn btn-primary" onclick="copyBridgePrompt()">
-                    <span id="copy-btn-text">Copy Prompt to Clipboard</span>
-                </button>
+                <button class="btn-secondary" onclick="closeModal('modal-bridge')">Close</button>
+                <button class="btn-primary-action" onclick="copyBridgePrompt()"><span id="copy-btn-text">Copy Prompt</span></button>
             </div>
         </div>
     </div>
 
-    <!-- MODAL 2: RAG KNOWLEDGE BASE -->
-    <div class="modal-overlay" id="modal-rag" style="display: none;">
-        <div class="modal-container">
+    <!-- MODAL 6: RAG KNOWLEDGE BASE -->
+    <div class="modal-overlay" id="modal-rag">
+        <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title">Local RAG Knowledge Engine</h3>
-                <button class="modal-close" onclick="closeModal('modal-rag')">&times;</button>
+                <h3>Local RAG Knowledge Engine</h3>
+                <button class="modal-close-btn" onclick="closeModal('modal-rag')">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="modal-desc">
-                    Indexes workspace code and documentation into line-bounded semantic chunks. Automatically injects top relevant code snippets into prompt context.
+                <p style="font-size: 12.5px; color: var(--text-secondary);">
+                    Indexes workspace code into semantic chunks. Injects relevant code snippets into prompt context.
                 </p>
-                <div class="rag-stat-cards">
-                    <div class="stat-card">
-                        <span class="card-label">Indexed Chunks</span>
-                        <span class="card-val" id="modal-rag-chunks">0</span>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                    <div style="background-color: var(--bg-card-hover); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 11px; color: var(--text-muted);">Indexed Chunks</div>
+                        <div style="font-size: 14px; font-weight: 700;" id="modal-rag-chunks">0</div>
                     </div>
-                    <div class="stat-card">
-                        <span class="card-label">Indexed Files</span>
-                        <span class="card-val" id="modal-rag-files">0</span>
+                    <div style="background-color: var(--bg-card-hover); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 11px; color: var(--text-muted);">Files</div>
+                        <div style="font-size: 14px; font-weight: 700;" id="modal-rag-files">0</div>
                     </div>
-                    <div class="stat-card">
-                        <span class="card-label">Vocabulary Size</span>
-                        <span class="card-val" id="modal-rag-vocab">0</span>
-                    </div>
-                </div>
-
-                <div class="form-group mt-3">
-                    <label for="rag-test-query">Test Semantic Search:</label>
-                    <div class="input-inline">
-                        <input type="text" id="rag-test-query" class="input-control" placeholder="e.g. FastAPI routes, ComplexityClassifier, token rates">
-                        <button class="btn btn-secondary" onclick="testRAGSearch()">Search</button>
+                    <div style="background-color: var(--bg-card-hover); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 11px; color: var(--text-muted);">Vocabulary</div>
+                        <div style="font-size: 14px; font-weight: 700;" id="modal-rag-vocab">0</div>
                     </div>
                 </div>
-                <div class="search-results" id="rag-search-results"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-danger btn-sm" onclick="clearRAGIndex()">Clear Index</button>
-                <button class="btn btn-primary" onclick="reindexWorkspace()">Re-Index Workspace</button>
+                <button class="btn-secondary" onclick="clearRAGIndex()">Clear Index</button>
+                <button class="btn-primary-action" onclick="reindexWorkspace()">Re-Index Workspace</button>
             </div>
         </div>
     </div>
 
-    <!-- MODAL 3: PRIVACY POLICY -->
-    <div class="modal-overlay" id="modal-privacy" style="display: none;">
-        <div class="modal-container modal-lg">
-            <div class="modal-header">
-                <h3 class="modal-title">Privacy Policy</h3>
-                <button class="modal-close" onclick="closeModal('modal-privacy')">&times;</button>
-            </div>
-            <div class="modal-body legal-content">
-                <h4>1. Commitment to User Privacy</h4>
-                <p>Agent Orchestration Platform is built with strict privacy-by-design principles. We do not sell, monetize, or track your personal information or prompt history.</p>
-
-                <h4>2. Offline Privacy Mode & Local Execution</h4>
-                <p>When Privacy Mode is enabled, all cloud API outbound calls are blocked. All prompt processing, feature extraction, and multi-agent workflows execute strictly on your local hardware via Ollama and local storage.</p>
-
-                <h4>3. Automatic PII Redaction</h4>
-                <p>All prompts routed through the Cost Autopilot Gateway pass through a local regex and entity sanitizer to redact sensitive identifiers (emails, phone numbers, API tokens) prior to any external model dispatch.</p>
-
-                <h4>4. Data Retention & Caching</h4>
-                <p>Exact-match cache entries, Prompt Vault records, and evidence ledgers are stored in local SQLite records on your machine. No third-party tracking pixels or telemetry scripts are used.</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" onclick="closeModal('modal-privacy')">I Understand</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL 4: TERMS OF SERVICE -->
-    <div class="modal-overlay" id="modal-terms" style="display: none;">
-        <div class="modal-container modal-lg">
-            <div class="modal-header">
-                <h3 class="modal-title">Terms of Service</h3>
-                <button class="modal-close" onclick="closeModal('modal-terms')">&times;</button>
-            </div>
-            <div class="modal-body legal-content">
-                <h4>1. License and Open-Source Terms</h4>
-                <p>Agent Orchestrator is provided under the MIT Open Source License. You are free to inspect, modify, and host the platform on private infrastructure.</p>
-
-                <h4>2. Model Routing & Cost Disclaimers</h4>
-                <p>Cost calculations, token rates, and savings estimates presented in telemetry dashboards are illustrative benchmarks based on published provider rate sheets. Actual provider billing may vary based on exact billing terms.</p>
-
-                <h4>3. AI-Generated Code & Verification</h4>
-                <p>Outputs generated by specialist agents (CodeAgent, ResearchAgent, AnalysisAgent) are suggestions and should be reviewed and verified by human developers before deployment into production environments.</p>
-
-                <h4>4. Third-Party Provider APIs</h4>
-                <p>Use of Google Gemini, Groq Cloud, OpenAI, OpenRouter, and Hugging Face is subject to their respective terms of service and acceptable use policies.</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" onclick="closeModal('modal-terms')">Agree & Close</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="js/app.js?v=2.1.0"></script>
+    <script src="js/app.js?v=3.0.0"></script>
 </body>
 </html>

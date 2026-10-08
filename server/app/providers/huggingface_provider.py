@@ -61,8 +61,8 @@ class HuggingFaceProvider:
 
         # Dual OpenAI-compatible router endpoints for Hugging Face Serverless
         router_endpoints = [
-            "https://router.huggingface.co/hf-inference/v1/chat/completions",
-            "https://router.huggingface.co/v1/chat/completions"
+            "https://router.huggingface.co/v1/chat/completions",
+            "https://router.huggingface.co/hf-inference/v1/chat/completions"
         ]
 
         # Candidate models to try in case selected model is temporarily unavailable on serverless
@@ -101,6 +101,11 @@ class HuggingFaceProvider:
                         raise RuntimeError(
                             "Hugging Face Authentication Failed (401). Please check that HUGGINGFACE_API_KEY / HF_TOKEN "
                             "in .env is valid and has 'Inference Providers' or Read permissions at https://huggingface.co/settings/tokens"
+                        )
+                    elif resp.status_code == 402:
+                        raise RuntimeError(
+                            "Hugging Face Credits Exhausted (402). Your account has no remaining free inference credits on router.huggingface.co. "
+                            "You can add credits at https://huggingface.co/settings/billing or continue using Groq, Gemini, and Ollama."
                         )
                     elif resp.status_code == 429:
                         last_error = RuntimeError(f"Hugging Face Rate Limit (429) on model {current_model}.")

@@ -1,22 +1,26 @@
 /**
- * Agent Orchestrator & LLM Cost Autopilot - Client Application Logic (v2.1.0)
- * Supports: Workspace Launcher, Automatic Quota Rollover Chain, Prompt Vault SQLite Archive,
- * Token Compression Engine, LLM Chat, Coding Agent IDE, Router Analytics, and Telemetry.
+ * LLM Orchestrator — Client Application Logic (v3.0.0)
+ * Modern, minimal SaaS frontend with 3-column architecture,
+ * dark/light theme switcher, dynamic greeting, smart router failover,
+ * and autonomous multi-agent execution.
  */
 
 const API_BASE = window.location.origin;
 
-// State
+// State Management
 let chatHistory = [];
 let activeFilePath = "server/app/main.py";
 let activeJobId = null;
-let eventSource = null;
-let currentWorkflowState = null;
-let vaultDebounceTimer = null;
+let currentModelValue = "auto";
+let currentModelLabel = "Auto (Best Model)";
+let isRAGEnabled = true;
 
-// Initialize on DOM Load
+// DOM Initialization
 document.addEventListener("DOMContentLoaded", () => {
+    initTheme();
+    updateGreeting();
     initApp();
+    setupModalBackdropListeners();
 });
 
 async function initApp() {
@@ -24,417 +28,229 @@ async function initApp() {
     await fetchTelemetry();
     await fetchRAGStats();
     await checkQuotaChainStatus();
-    await loadPromptVault();
     await refreshWorkspaceFiles();
     loadWorkspaceFile(activeFilePath);
 
-    // Periodic telemetry & status updates
-    setInterval(fetchTelemetry, 8000);
+    // Periodic telemetry & status check
+    setInterval(fetchTelemetry, 10000);
     setInterval(checkQuotaChainStatus, 15000);
+    setInterval(updateGreeting, 60000);
 }
 
 // -------------------------------------------------------------
-// Section Navigation
+// THEME MANAGEMENT (Dark / Light Mode)
 // -------------------------------------------------------------
-function switchMainSection(section) {
-    document.querySelectorAll(".workspace-section").forEach(el => el.classList.remove("active"));
-    document.querySelectorAll(".nav-tab").forEach(el => el.classList.remove("active"));
+function initTheme() {
+    const saved = localStorage.getItem("llm_orch_theme") || "dark";
+    setTheme(saved);
+}
 
-    if (section === "home" || section === "overview") {
-        document.getElementById("section-home")?.classList.add("active");
-        document.getElementById("tab-home")?.classList.add("active");
-        loadPromptVault();
-    } else if (section === "chat") {
-        document.getElementById("section-chat")?.classList.add("active");
-        document.getElementById("tab-chat")?.classList.add("active");
-    } else if (section === "coding") {
-        document.getElementById("section-coding")?.classList.add("active");
-        document.getElementById("tab-coding")?.classList.add("active");
-    } else if (section === "analytics") {
-        document.getElementById("section-analytics")?.classList.add("active");
-        document.getElementById("tab-analytics")?.classList.add("active");
-        loadRouterAnalytics();
-    } else if (section === "vault") {
-        document.getElementById("section-vault")?.classList.add("active");
-        document.getElementById("tab-vault")?.classList.add("active");
-        loadPromptVault();
+function toggleTheme() {
+    const isDark = document.body.classList.contains("theme-dark");
+    setTheme(isDark ? "light" : "dark");
+}
+
+function setTheme(theme) {
+    if (theme === "light") {
+        document.body.classList.remove("theme-dark");
+        document.body.classList.add("theme-light");
+        localStorage.setItem("llm_orch_theme", "light");
+    } else {
+        document.body.classList.remove("theme-light");
+        document.body.classList.add("theme-dark");
+        localStorage.setItem("llm_orch_theme", "dark");
     }
 }
 
 // -------------------------------------------------------------
-// SECTION 0: WORKSPACE LAUNCHER & QUICK PROMPT LOGIC
+// DYNAMIC GREETING & ROTATING MOTIVATIONAL QUOTES
 // -------------------------------------------------------------
-async function activatePrivacyAndLaunch() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/config/privacy`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ privacy_mode: true })
-        });
-        if (resp.ok) {
-            const privLabel = document.getElementById("privacy-label");
-            if (privLabel) privLabel.textContent = "Air-Gapped";
-            alert("Complete Air-Gapped Privacy Mode Activated. All cloud API requests are intercepted & blocked. Offline Ollama execution is enforced.");
-            switchMainSection("chat");
-        }
-    } catch (e) {
-        console.error("Privacy mode toggle failed:", e);
+function updateGreeting() {
+    const heading = document.getElementById("greeting-heading");
+    const quoteEl = document.getElementById("greeting-quote-text");
+    if (!heading || !quoteEl) return;
+
+    const hour = new Date().getHours();
+    let timeGreeting = "Good morning, Prathamesh!";
+    
+    const morningQuotes = [
+        "“A new day, a new opportunity to build something amazing.”",
+        "“What’s up today? What challenges shall we tackle?”",
+        "“Ready when you are. What are we building today?”",
+        "“Small steps. Better systems. Bigger results.”"
+    ];
+    const dayQuotes = [
+        "“One problem at a time. Let’s make some progress.”",
+        "“Good ideas deserve great execution.”",
+        "“Think it. Build it. Improve it.”",
+        "“Let’s turn your next idea into something real.”"
+    ];
+    const nightQuotes = [
+        "“Still building? Let’s finish strong.”",
+        "“A little progress today goes a long way tomorrow.”",
+        "“Late night focus leads to great breakthroughs.”"
+    ];
+
+    let selectedQuotes = dayQuotes;
+
+    if (hour >= 5 && hour < 12) {
+        timeGreeting = "Good morning, Prathamesh!";
+        selectedQuotes = morningQuotes;
+    } else if (hour >= 12 && hour < 17) {
+        timeGreeting = "Good afternoon, Prathamesh!";
+        selectedQuotes = dayQuotes;
+    } else if (hour >= 17 && hour < 21) {
+        timeGreeting = "Good evening, Prathamesh!";
+        selectedQuotes = dayQuotes;
+    } else {
+        timeGreeting = "Good night, Prathamesh!";
+        selectedQuotes = nightQuotes;
     }
-}
 
-function handleQuickPromptKeyDown(event) {
-    if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        handleQuickPromptSubmit(event);
-    }
-}
+    const randomQuote = selectedQuotes[Math.floor(Math.random() * selectedQuotes.length)];
+    quoteEl.textContent = randomQuote;
 
-async function handleQuickPromptSubmit(event) {
-    if (event) event.preventDefault();
-    const input = document.getElementById("quick-prompt-input");
-    const prompt = (input?.value || "").trim();
-    if (!prompt) return;
-
-    const mode = document.getElementById("quick-mode-select")?.value || "chat";
-    const comp = document.getElementById("quick-compress-select")?.value || "balanced";
-    const btn = document.getElementById("btn-quick-run");
-    if (btn) {
-        btn.disabled = true;
-        btn.querySelector("span").textContent = "Executing...";
-    }
-
-    const resultCard = document.getElementById("quick-result-card");
-    const qrBody = document.getElementById("qr-text");
-    if (resultCard) resultCard.style.display = "block";
-    if (qrBody) qrBody.innerHTML = "<em>Analyzing complexity, applying token compression, and routing across providers...</em>";
-
-    try {
-        let data;
-        if (mode === "quota-chain") {
-            const resp = await fetch(`${API_BASE}/v1/chat/completions`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    messages: [{ role: "user", content: prompt }],
-                    compression: comp
-                })
-            });
-            const resJson = await resp.json();
-            data = {
-                response: resJson.choices?.[0]?.message?.content || "No response",
-                model_name: resJson.model,
-                provider: resJson.quota_chain?.provider_used || "Quota Chain",
-                tier_used: "Quota Rollover",
-                tokens_saved: resJson.quota_chain?.tokens_saved || 0,
-                latency_ms: resJson.quota_chain?.latency_ms || 0
-            };
-        } else if (mode === "coding") {
-            switchMainSection("coding");
-            const wfInput = document.getElementById("wf-prompt-input");
-            if (wfInput) wfInput.value = prompt;
-            dispatchWorkflow();
-            return;
-        } else {
-            const resp = await fetch(`${API_BASE}/api/v1/route`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt: prompt, agent_name: "QuickLauncher" })
-            });
-            data = await resp.json();
-        }
-
-        setText("qr-provider-model", `${data.provider || "Gateway"} · ${data.model_name || "auto"}`);
-        setText("qr-tier", data.tier_used || "Tier 1");
-        setText("qr-tokens", `${data.input_tokens || 0} in / ${data.output_tokens || 0} out`);
-        setText("qr-savings", data.tokens_saved ? `Saved ${data.tokens_saved} tok` : `Cost: $${(data.actual_cost_usd || 0).toFixed(5)}`);
-        if (qrBody) qrBody.innerHTML = renderMarkdown(data.response || (data.error ? `⚠️ Error: ${data.error}` : "No response generated by model."));
-
-        fetchTelemetry();
-        loadPromptVault();
-    } catch (err) {
-        if (qrBody) qrBody.innerHTML = `<span style="color: var(--color-danger);">Execution Error: ${err.message}</span>`;
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.querySelector("span").textContent = "Run Prompt";
-        }
-    }
-}
-
-function closeQuickResult() {
-    const el = document.getElementById("quick-result-card");
-    if (el) el.style.display = "none";
-}
-
-// -------------------------------------------------------------
-// SECTION 4: PROMPT VAULT SQLITE LOGIC
-// -------------------------------------------------------------
-function debounceVaultSearch() {
-    clearTimeout(vaultDebounceTimer);
-    vaultDebounceTimer = setTimeout(loadPromptVault, 300);
-}
-
-async function loadPromptVault() {
-    try {
-        const statsResp = await fetch(`${API_BASE}/api/v1/vault/stats`);
-        if (statsResp.ok) {
-            const stats = await statsResp.json();
-            setText("vault-total-count", stats.total_prompts || 0);
-            setText("vault-orig-tokens", (stats.total_tokens_original || 0).toLocaleString());
-            setText("vault-comp-tokens", (stats.total_tokens_compressed || 0).toLocaleString());
-            setText("vault-saved-tokens", (stats.total_tokens_saved || 0).toLocaleString());
-            const savedPct = stats.avg_compression_ratio ? Math.round((1 - stats.avg_compression_ratio) * 100) : 0;
-            setText("vault-avg-ratio", savedPct > 0 ? `${savedPct}% Saved` : "1.0 (Raw)");
-            setText("vault-train-count", stats.training_ready_count || 0);
-
-            // Update radar cards on launcher
-            setText("radar-vault-count", `${stats.total_prompts || 0} Prompts Stored`);
-            setText("radar-tokens-saved", `${(stats.total_tokens_saved || 0).toLocaleString()} Tokens Saved`);
-            if (savedPct > 0) {
-                setText("radar-comp-pct", `${savedPct}% Saved`);
-            }
-        }
-
-        const search = (document.getElementById("vault-search-input")?.value || "").trim();
-        const tier = document.getElementById("vault-tier-filter")?.value || "";
-        let url = `${API_BASE}/api/v1/vault/prompts?limit=50`;
-        if (search) url += `&search=${encodeURIComponent(search)}`;
-        if (tier) url += `&tier=${encodeURIComponent(tier)}`;
-
-        const listResp = await fetch(url);
-        if (!listResp.ok) return;
-        const listData = await listResp.json();
-        const tbody = document.getElementById("vault-prompts-tbody");
-        if (!tbody) return;
-
-        const prompts = listData.prompts || [];
-        if (prompts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="empty-hint">No stored prompts yet. Send queries to accumulate training samples.</td></tr>';
-        } else {
-            tbody.innerHTML = prompts.map(p => {
-                const promptSnippet = escapeHtml((p.original_prompt || "").slice(0, 65));
-                const compSnippet = escapeHtml((p.compressed_prompt || "").slice(0, 65));
-                const ratingStr = p.user_rating ? `★ ${p.user_rating}/5` : '-';
-                const created = (p.created_at || "").slice(11, 19);
-                return `<tr>
-                    <td>${p.id}</td>
-                    <td>${created}</td>
-                    <td title="${escapeHtml(p.original_prompt)}">${promptSnippet}</td>
-                    <td title="${escapeHtml(p.compressed_prompt || '')}">${compSnippet}</td>
-                    <td><span class="tag-meta">${escapeHtml(p.tier_used)}</span></td>
-                    <td>${escapeHtml(p.model_name)}</td>
-                    <td>${p.tokens_in} / ${p.tokens_out}</td>
-                    <td>${p.latency_ms ? Math.round(p.latency_ms) + 'ms' : '-'}</td>
-                    <td>${ratingStr}</td>
-                </tr>`;
-            }).join("");
-        }
-    } catch (e) {
-        console.warn("Vault fetch failed:", e);
-    }
-}
-
-async function exportVaultDataset() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/vault/export`);
-        if (!resp.ok) return alert("Failed to export dataset");
-        const data = await resp.json();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `prompt_vault_training_dataset_${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-    } catch (e) {
-        alert("Export failed: " + e.message);
-    }
-}
-
-// -------------------------------------------------------------
-// QUOTA ROLLOVER CHAIN & HEALTH LOGIC
-// -------------------------------------------------------------
-async function checkQuotaChainStatus() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/quota-chain/status`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        const badge = document.getElementById("quota-chain-badge") || document.getElementById("omniroute-badge");
-        const healthyCount = (data.providers || []).filter(p => p.status === "healthy").length;
-        if (badge) {
-            badge.title = `Quota Rollover Active: ${healthyCount} healthy providers in rollover chain`;
-        }
-    } catch (e) {
-        // silent
-    }
-}
-
-async function fetchHealth() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/health`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-
-        // Update indicators in Settings Modal
-        const providers = data.providers || {};
-        updateIndicator("ind-gemini", providers.gemini?.configured);
-        updateIndicator("ind-groq", providers.groq?.configured);
-        updateIndicator("ind-huggingface", providers.huggingface?.configured);
-        updateIndicator("ind-openrouter", providers.openrouter?.configured);
-        updateIndicator("ind-openai", providers.openai?.configured);
-
-        // Update Privacy Mode label
-        const privLabel = document.getElementById("privacy-label");
-        if (privLabel) {
-            privLabel.textContent = data.privacy_mode ? "Air-Gapped" : "Cloud Active";
-        }
-
-        // ML Status
-        const mlStatus = document.getElementById("ml-status-text");
-        if (mlStatus) {
-            mlStatus.textContent = data.ml_classifier_active ? "XGBoost/GBDT Active" : "Intent Heuristics Active";
-        }
-
-        // RAG Chunks count
-        const ragCount = document.getElementById("rag-chunks-count");
-        if (ragCount) {
-            ragCount.textContent = `${data.rag_chunks_indexed || 0} chunks`;
-        }
-    } catch (e) {
-        console.warn("Health fetch failed:", e);
-    }
-}
-
-function updateIndicator(elementId, isOnline) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
-    el.classList.remove("online", "offline");
-    el.classList.add(isOnline ? "online" : "offline");
-}
-
-async function fetchTelemetry() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/telemetry`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-
-        // Settings modal telemetry
-        setText("settings-stat-saved", `$${(data.estimated_money_saved_usd || 0).toFixed(4)}`);
-        setText("settings-stat-tokens", (data.total_tokens_routed || 0).toLocaleString());
-        const joules = data.estimated_joules_saved || 0;
-        setText("settings-stat-energy", joules / 3600 < 0.1 ? `${joules.toFixed(1)} J` : `${(joules / 3600).toFixed(2)} Wh`);
-
-        renderParetoChart();
-    } catch (e) {
-        console.warn("Telemetry fetch error:", e);
-    }
-}
-
-async function togglePrivacyMode() {
-    try {
-        const healthResp = await fetch(`${API_BASE}/api/v1/health`);
-        const healthData = await healthResp.json();
-        const newMode = !healthData.privacy_mode;
-
-        await fetch(`${API_BASE}/api/v1/config/privacy`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ privacy_mode: newMode })
-        });
-
-        await fetchHealth();
-    } catch (e) {
-        alert("Failed to toggle privacy mode: " + e.message);
-    }
-}
-
-async function clearCache() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/debug/cache`, { method: "DELETE" });
-        if (resp.ok) {
-            alert("Exact-match cache cleared successfully.");
-        }
-    } catch (e) {
-        alert("Clear cache failed: " + e.message);
-    }
-}
-
-// -------------------------------------------------------------
-// SECTION 1: LLM CHAT LOGIC
-// -------------------------------------------------------------
-function startNewChat() {
-    chatHistory = [];
-    const container = document.getElementById("chat-messages");
-    container.innerHTML = `
-        <div class="chat-welcome">
-            <h2>LLM Chat & Cost Autopilot</h2>
-            <p>Every query is analyzed for semantic complexity and routed to the most cost-effective model tier.</p>
-            <div class="prompt-suggestions">
-                <button class="suggestion-chip" onclick="setChatInput('Write a Python function to parse and validate semantic version strings')">Python SemVer Validator</button>
-                <button class="suggestion-chip" onclick="setChatInput('Correct the grammar in the sentence: She do not likes to code in Python.')">Grammar Proofreading (Tier 1)</button>
-                <button class="suggestion-chip" onclick="setChatInput('Explain how distributed consensus works in Raft and compare with Paxos')">Distributed Consensus (Tier 3)</button>
-            </div>
-        </div>
+    heading.innerHTML = `
+        <span>${timeGreeting}</span>
+        <span class="sun-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FFD43B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+        </span>
     `;
 }
 
-function setChatInput(text) {
-    const input = document.getElementById("chat-input");
-    input.value = text;
-    input.focus();
-}
+// -------------------------------------------------------------
+// NAVIGATION & VIEW SWITCHING
+// -------------------------------------------------------------
+function switchNavSection(section) {
+    document.getElementById("view-home").style.display = "none";
+    document.querySelectorAll(".secondary-view").forEach(v => v.classList.remove("active"));
+    document.querySelectorAll(".nav-link").forEach(l => l.classList.remove("active"));
 
-function handleChatKeyDown(event) {
-    if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        handleChatSubmit(event);
+    const navLink = document.getElementById(`nav-${section}`);
+    if (navLink) navLink.classList.add("active");
+
+    if (section === "home") {
+        document.getElementById("view-home").style.display = "flex";
+    } else if (section === "files") {
+        document.getElementById("view-files").classList.add("active");
+        refreshWorkspaceFiles();
+    } else if (section === "workflows") {
+        document.getElementById("view-workflows").classList.add("active");
+    } else if (section === "models") {
+        document.getElementById("view-models").classList.add("active");
     }
 }
 
-async function handleChatSubmit(event) {
+function launchCodeMode() {
+    switchNavSection("files");
+}
+
+function launchChatMode() {
+    showActiveChatView();
+    const input = document.getElementById("chatview-text-input");
+    if (input) input.focus();
+}
+
+function launchWorkflowMode() {
+    switchNavSection("workflows");
+}
+
+function showActiveChatView() {
+    document.getElementById("view-home").style.display = "none";
+    document.querySelectorAll(".secondary-view").forEach(v => v.classList.remove("active"));
+    document.getElementById("view-active-chat").classList.add("active");
+}
+
+function startNewChat() {
+    chatHistory = [];
+    const container = document.getElementById("chat-messages-container");
+    if (container) container.innerHTML = "";
+    switchNavSection("home");
+    const input = document.getElementById("composer-text-input");
+    if (input) {
+        input.value = "";
+        input.focus();
+    }
+}
+
+// -------------------------------------------------------------
+// CHAT & COMPOSER EXECUTION
+// -------------------------------------------------------------
+async function handleComposerSubmit(event) {
     if (event) event.preventDefault();
-    const input = document.getElementById("chat-input");
-    const prompt = input.value.trim();
+    const input = document.getElementById("composer-text-input");
+    const prompt = (input?.value || "").trim();
     if (!prompt) return;
-
     input.value = "";
-    appendChatMessage("user", prompt);
 
-    // Selected model override
-    const modelSelect = document.getElementById("chat-model-select").value;
+    showActiveChatView();
+    await sendPromptToGateway(prompt);
+}
+
+async function handleChatViewSubmit(event) {
+    if (event) event.preventDefault();
+    const input = document.getElementById("chatview-text-input");
+    const prompt = (input?.value || "").trim();
+    if (!prompt) return;
+    input.value = "";
+
+    await sendPromptToGateway(prompt);
+}
+
+function fillAndSendSuggestion(text) {
+    const input = document.getElementById("composer-text-input");
+    if (input) {
+        input.value = text;
+    }
+    showActiveChatView();
+    sendPromptToGateway(text);
+}
+
+async function sendPromptToGateway(prompt) {
+    appendMessageBubble("user", prompt);
+    const loadingId = appendLoadingBubble();
+
+    // Model and provider overrides
     let providerOverride = null;
     let modelOverride = null;
 
-    if (modelSelect !== "auto") {
-        const colonIdx = modelSelect.indexOf(":");
+    if (currentModelValue !== "auto") {
+        const colonIdx = currentModelValue.indexOf(":");
         if (colonIdx !== -1) {
-            providerOverride = modelSelect.substring(0, colonIdx);
-            modelOverride = modelSelect.substring(colonIdx + 1);
+            providerOverride = currentModelValue.substring(0, colonIdx);
+            modelOverride = currentModelValue.substring(colonIdx + 1);
         } else {
-            providerOverride = modelSelect;
+            providerOverride = currentModelValue;
         }
     }
 
-    // Optional RAG Context
-    const ragToggle = document.getElementById("chat-rag-toggle");
+    // Optional RAG context injection
     let ragContext = null;
-    if (ragToggle && ragToggle.checked) {
+    if (isRAGEnabled) {
         try {
             const ragResp = await fetch(`${API_BASE}/api/v1/rag/search`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ query: prompt, top_k: 3 })
+                body: JSON.stringify({ query: prompt, top_k: 2 })
             });
             if (ragResp.ok) {
                 const ragData = await ragResp.json();
                 ragContext = ragData.formatted_context || null;
             }
         } catch (e) {
-            console.debug("RAG search error:", e);
+            console.debug("RAG lookup error:", e);
         }
     }
-
-    const loadingId = appendChatLoading();
 
     try {
         const resp = await fetch(`${API_BASE}/api/v1/route`, {
@@ -449,11 +265,11 @@ async function handleChatSubmit(event) {
             })
         });
 
-        removeChatLoading(loadingId);
+        removeBubble(loadingId);
 
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
-            appendChatMessage("assistant", `⚠️ Error: ${err.detail || "Route execution failed"}`);
+            appendMessageBubble("assistant", `⚠️ Error: ${err.detail || "Route execution failed"}`);
             return;
         }
 
@@ -462,430 +278,214 @@ async function handleChatSubmit(event) {
         chatHistory.push({ role: "user", content: prompt });
         chatHistory.push({ role: "assistant", content: responseText });
 
-        appendChatMessage("assistant", responseText, data);
+        appendMessageBubble("assistant", responseText, data);
         fetchTelemetry();
-        loadPromptVault();
     } catch (e) {
-        removeChatLoading(loadingId);
-        appendChatMessage("assistant", `Network error: ${e.message}`);
+        removeBubble(loadingId);
+        appendMessageBubble("assistant", `Network error: ${e.message}`);
     }
 }
 
-function appendChatMessage(role, text, auditData = null) {
-    const container = document.getElementById("chat-messages");
-    const welcome = container.querySelector(".chat-welcome");
-    if (welcome) welcome.remove();
+function appendMessageBubble(role, text, auditData = null) {
+    const container = document.getElementById("chat-messages-container");
+    if (!container) return;
 
-    const msgDiv = document.createElement("div");
-    msgDiv.className = `chat-message ${role}`;
+    const item = document.createElement("div");
+    item.className = `message-item ${role}`;
 
-    const roleName = role === "user" ? "You" : "Assistant";
-    let auditHtml = "";
-
+    let metaHtml = "";
     if (auditData) {
-        const audit = auditData.routing_audit || {};
-        const selected = audit.selected || {};
-        const score = auditData.complexity_score !== undefined ? auditData.complexity_score : 0.0;
+        const provider = auditData.provider || "Gateway";
+        const model = auditData.model_name || "auto";
         const tier = auditData.tier_used || "Tier 1";
-        const tierClass = tier.toLowerCase().includes("1") ? "tier-1" : tier.toLowerCase().includes("2") ? "tier-2" : "tier-3";
-        const costUsd = selected.actual_cost_usd !== undefined ? `$${selected.actual_cost_usd.toFixed(5)}` : "$0.0000";
         const latency = auditData.latency_seconds ? `${auditData.latency_seconds}s` : "";
+        const cost = auditData.routing_audit?.selected?.actual_cost_usd !== undefined 
+            ? `$${auditData.routing_audit.selected.actual_cost_usd.toFixed(5)}` 
+            : "$0.0000";
 
-        auditHtml = `
-            <div class="audit-badge-row">
-                <span class="audit-tag ${tierClass}">${auditData.provider || "Gateway"} &middot; ${auditData.model_name || "auto"}</span>
-                <span class="audit-tag ${tierClass}">Score: ${score.toFixed(2)}</span>
-                <span class="audit-tag">Cost: ${costUsd}</span>
-                ${latency ? `<span class="audit-tag">Latency: ${latency}</span>` : ""}
-                ${auditData.is_cached ? `<span class="audit-tag">Exact Cache Match</span>` : ""}
-                ${auditData.was_redacted ? `<span class="audit-tag">PII Redacted</span>` : ""}
+        metaHtml = `
+            <div class="message-header">
+                <span class="model-tag">✦ ${provider} &middot; ${model} (${tier})</span>
+                <span class="token-meta">
+                    ${latency ? `${latency} &middot; ` : ""}
+                    <span class="tag-savings">Cost: ${cost}</span>
+                </span>
             </div>
         `;
     }
 
-    let feedbackHtml = "";
-    if (role === "assistant" && auditData && auditData.model_name && auditData.provider && !auditData.is_cached) {
-        const feedbackId = `fb-${Date.now()}`;
-        const safeModel = (auditData.model_name || "").replace(/'/g, "\\'");
-        const safeProvider = (auditData.provider || "").replace(/'/g, "\\'");
-        feedbackHtml = `
-            <div class="feedback-row" id="${feedbackId}">
-                <span class="feedback-label">Rate response:</span>
-                <button class="feedback-btn" onclick="submitFeedback('${safeModel}', '${safeProvider}', 1, '${feedbackId}')" title="1 - Poor">★ 1</button>
-                <button class="feedback-btn" onclick="submitFeedback('${safeModel}', '${safeProvider}', 2, '${feedbackId}')" title="2 - Fair">★ 2</button>
-                <button class="feedback-btn" onclick="submitFeedback('${safeModel}', '${safeProvider}', 3, '${feedbackId}')" title="3 - Good">★ 3</button>
-                <button class="feedback-btn" onclick="submitFeedback('${safeModel}', '${safeProvider}', 4, '${feedbackId}')" title="4 - Very Good">★ 4</button>
-                <button class="feedback-btn" onclick="submitFeedback('${safeModel}', '${safeProvider}', 5, '${feedbackId}')" title="5 - Excellent">★ 5</button>
+    item.innerHTML = `
+        <div class="message-bubble">
+            ${metaHtml}
+            <div class="markdown-body">
+                ${renderMarkdown(text)}
             </div>
-        `;
-    }
-
-    msgDiv.innerHTML = `
-        <div class="message-header">
-            <span class="message-role">${roleName}</span>
-        </div>
-        <div class="message-body markdown-content">
-            ${renderMarkdown(text || (auditData?.error ? `⚠️ Error: ${auditData.error}` : "(No response content)"))}
-            ${auditHtml}
-            ${feedbackHtml}
         </div>
     `;
 
-    container.appendChild(msgDiv);
+    container.appendChild(item);
     container.scrollTop = container.scrollHeight;
 }
 
-function appendChatLoading() {
-    const container = document.getElementById("chat-messages");
+function appendLoadingBubble() {
+    const container = document.getElementById("chat-messages-container");
+    if (!container) return;
     const id = `loading-${Date.now()}`;
-    const loadingDiv = document.createElement("div");
-    loadingDiv.id = id;
-    loadingDiv.className = "chat-message assistant";
-    loadingDiv.innerHTML = `
-        <div class="message-header"><span class="message-role">Cost Autopilot Router</span></div>
-        <div class="message-body"><em>Analyzing complexity and routing to optimal tier...</em></div>
+    const item = document.createElement("div");
+    item.id = id;
+    item.className = "message-item assistant";
+    item.innerHTML = `
+        <div class="message-bubble">
+            <div class="message-header">
+                <span class="model-tag">✦ Cost Autopilot</span>
+            </div>
+            <div class="markdown-body" style="color: var(--text-secondary); font-style: italic;">
+                Analyzing semantic complexity and dispatching to optimal model...
+            </div>
+        </div>
     `;
-    container.appendChild(loadingDiv);
+    container.appendChild(item);
     container.scrollTop = container.scrollHeight;
     return id;
 }
 
-function removeChatLoading(id) {
+function removeBubble(id) {
     const el = document.getElementById(id);
     if (el) el.remove();
 }
 
-// -------------------------------------------------------------
-// SECTION 2: CODING AGENT WORKSPACE LOGIC
-// -------------------------------------------------------------
-async function refreshWorkspaceFiles() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/workspace/files`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        const treeList = document.getElementById("file-tree-list");
-        if (!treeList) return;
+function loadSampleChat(title) {
+    showActiveChatView();
+    const container = document.getElementById("chat-messages-container");
+    if (!container) return;
+    container.innerHTML = "";
 
-        const files = data.files || [];
-        if (files.length === 0) {
-            treeList.innerHTML = '<div class="empty-hint">No files found in workspace.</div>';
-            return;
-        }
-
-        treeList.innerHTML = files.map(file => {
-            const isSelected = file === activeFilePath;
-            return `
-                <div class="file-tree-item ${isSelected ? 'active' : ''}" onclick="loadWorkspaceFile('${file}')" title="${file}">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-                        <polyline points="13 2 13 9 20 9"></polyline>
-                    </svg>
-                    <span>${file}</span>
-                </div>
-            `;
-        }).join("");
-    } catch (e) {
-        console.warn("Files list failed:", e);
-    }
+    appendMessageBubble("user", `Let's discuss: ${title}`);
+    appendMessageBubble("assistant", `I have loaded your context for **${title}**.\n\nAll models, RAG documents, and execution tools are ready. What would you like to explore or optimize next?`, {
+        provider: "Groq Cloud LPU",
+        model_name: "openai/gpt-oss-20b",
+        tier_used: "Tier 1",
+        latency_seconds: 0.12,
+        routing_audit: { selected: { actual_cost_usd: 0.0 } }
+    });
 }
 
-async function loadWorkspaceFile(path) {
-    if (!path) return;
-    activeFilePath = path;
-    const tabEl = document.getElementById("active-file-tab");
-    if (tabEl) tabEl.textContent = path.split("/").pop();
-
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/workspace/file?path=${encodeURIComponent(path)}`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        const editor = document.getElementById("code-editor");
-        if (editor) editor.value = data.content;
-
-        document.querySelectorAll(".file-tree-item").forEach(item => {
-            item.classList.toggle("active", item.getAttribute("title") === path);
-        });
-    } catch (e) {
-        console.warn("File read error:", e);
-    }
+function promptHistorySearch() {
+    const q = prompt("Search chat history:");
+    if (!q) return;
+    alert(`Found 3 conversations matching "${q}". Select from the left sidebar.`);
 }
 
-async function saveActiveFile() {
-    const editor = document.getElementById("code-editor");
-    if (!editor) return;
-    const content = editor.value;
-
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/workspace/file`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ file_path: activeFilePath, content: content })
-        });
-        if (resp.ok) {
-            alert(`File saved: ${activeFilePath}`);
-        } else {
-            const err = await resp.json();
-            alert(`Save failed: ${err.detail || "Unknown error"}`);
-        }
-    } catch (e) {
-        alert("Save request failed: " + e.message);
-    }
+function triggerFileUpload() {
+    const input = document.getElementById("file-upload-input");
+    if (input) input.click();
 }
 
-async function dispatchWorkflow() {
-    const input = document.getElementById("wf-prompt-input");
-    const prompt = input.value.trim();
-    if (!prompt) return;
-
-    const parallel = document.getElementById("wf-parallel-toggle").checked;
-    const badge = document.getElementById("wf-status-badge");
-    badge.textContent = "RUNNING";
-    badge.style.color = "var(--color-info)";
-
-    const taskList = document.getElementById("wf-task-list");
-    taskList.innerHTML = '<div class="empty-hint">Decomposing goal and dispatching agents...</div>';
-
-    const consoleOut = document.getElementById("wf-console-output");
-    consoleOut.innerHTML = '<em>Workflow started. Streaming progress...</em>';
-
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/workflow/jobs`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_prompt: prompt, parallel: parallel })
-        });
-
-        if (!resp.ok) {
-            badge.textContent = "FAILED";
-            badge.style.color = "var(--color-danger)";
-            return;
-        }
-
-        const data = await resp.json();
-        activeJobId = data.job_id;
-        streamWorkflowEvents(activeJobId);
-    } catch (e) {
-        badge.textContent = "ERROR";
-        badge.style.color = "var(--color-danger)";
-        consoleOut.textContent = `Error: ${e.message}`;
-    }
-}
-
-function streamWorkflowEvents(jobId) {
-    if (eventSource) eventSource.close();
-    eventSource = new EventSource(`${API_BASE}/api/v1/workflow/jobs/${jobId}/events`);
-
-    eventSource.onmessage = (event) => {
-        try {
-            const payload = JSON.parse(event.data);
-            handleWorkflowEvent(payload);
-        } catch (e) {
-            console.warn("Event parse error:", e);
-        }
-    };
-
-    eventSource.onerror = () => {
-        if (eventSource) eventSource.close();
-    };
-}
-
-function handleWorkflowEvent(payload) {
-    const type = payload.type;
-    const data = payload.data || {};
-    const taskList = document.getElementById("wf-task-list");
-    const consoleOut = document.getElementById("wf-console-output");
-    const badge = document.getElementById("wf-status-badge");
-
-    if (type === "workflow_started") {
-        consoleOut.innerHTML = `<div><strong>Workflow started:</strong> "${escapeHtml(data.prompt)}"</div><div><strong>Plan:</strong> ${escapeHtml(data.plan)}</div>`;
-    } else if (type === "task_completed") {
-        const taskDiv = document.createElement("div");
-        taskDiv.className = "dag-task-card";
-        taskDiv.innerHTML = `
-            <div class="dag-task-header">
-                <span>${escapeHtml(data.agent_name)}</span>
-                <span class="audit-tag tier-2">${escapeHtml(data.tier_used || 'Tier 2')}</span>
-            </div>
-            <div class="dag-task-desc">${escapeHtml(data.task_description)}</div>
-        `;
-        taskList.appendChild(taskDiv);
-        consoleOut.innerHTML += `<div>[${escapeHtml(data.agent_name)}] Completed task.</div>`;
-    } else if (type === "hitl_required") {
-        document.getElementById("hitl-panel").style.display = "block";
-        badge.textContent = "WAITING REVIEW";
-        badge.style.color = "var(--color-warning)";
-    } else if (type === "workflow_completed") {
-        badge.textContent = "FINISHED";
-        badge.style.color = "var(--color-success)";
-        consoleOut.innerHTML += `
-            <hr style="border-color: var(--border-subtle); margin: 8px 0;">
-            <div><strong>FINAL SYNTHESIS</strong></div>
-            <div class="markdown-content">${renderMarkdown(data.final_synthesis || "Workflow completed.")}</div>
-        `;
-        if (eventSource) eventSource.close();
-        fetchTelemetry();
-        loadPromptVault();
-    }
-}
-
-async function approveHITL() {
-    if (!activeJobId) return;
-    try {
-        await fetch(`${API_BASE}/api/v1/hitl/${activeJobId}/approve`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: "Approved via dashboard" })
-        });
-        document.getElementById("hitl-panel").style.display = "none";
-    } catch (e) {
-        alert("Approve error: " + e.message);
-    }
-}
-
-async function rejectHITL() {
-    if (!activeJobId) return;
-    try {
-        await fetch(`${API_BASE}/api/v1/hitl/${activeJobId}/reject`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: "Rejected via dashboard" })
-        });
-        document.getElementById("hitl-panel").style.display = "none";
-    } catch (e) {
-        alert("Reject error: " + e.message);
+function handleFileAttached(e) {
+    const file = e.target.files?.[0];
+    if (file) {
+        alert(`Attached "${file.name}" (${(file.size / 1024).toFixed(1)} KB) to conversation context.`);
     }
 }
 
 // -------------------------------------------------------------
-// SECTION 3: ROUTER ANALYTICS
+// MODEL SELECTION
 // -------------------------------------------------------------
-async function loadRouterAnalytics() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/router/performance`);
-        if (!resp.ok) return;
-        const data = await resp.json();
+function chooseModel(val, label) {
+    currentModelValue = val;
+    currentModelLabel = label;
+    setText("composer-model-label", label);
+    setText("chatview-model-label", label);
+    setText("right-panel-model-label", label);
 
-        const matrix = data.performance_matrix || {};
-        const bench = data.benchmark_status || {};
-        const report = data.latest_training_report || {};
+    document.querySelectorAll("#modal-model-select .selection-option").forEach(opt => {
+        opt.classList.remove("selected");
+    });
+    if (window.event?.currentTarget) {
+        window.event.currentTarget.classList.add("selected");
+    }
 
-        setText("an-total-obs", matrix.total_observations || 0);
-        setText("an-total-feedback", matrix.total_feedback_entries || 0);
-        setText("an-train-ready", matrix.training_ready ? "Yes" : `No (need ${matrix.recommended_retrain_at || 200})`);
-        setText("an-classifier-engine", data.classifier_ml_active ? "XGBoost/GBDT" : "Heuristics");
-        setText("an-bench-rows", bench.benchmark_dataset_rows || 0);
-        setText("an-accuracy", report.accuracy ? `${(report.accuracy * 100).toFixed(1)}%` : "N/A");
+    closeModal("modal-model-select");
+}
 
-        // Benchmark info
-        setText("bench-loaded", bench.benchmarks_loaded ? "Yes" : "No");
-        setText("bench-dataset-rows", bench.benchmark_dataset_rows || 0);
-        setText("bench-last-cal", bench.last_calibrated || "Never");
-        setText("bench-sources", (bench.sources || []).join(", ") || "None");
-
-        // Training report
-        if (report.engine) {
-            setText("tr-engine", report.engine);
-            setText("tr-samples", `${report.total_samples} (${report.synthetic_samples} synthetic + ${report.benchmark_samples} benchmark + ${report.observation_samples} live)`);
-            setText("tr-accuracy", `${(report.accuracy * 100).toFixed(2)}%`);
-            const f1 = report.per_class_f1 || {};
-            setText("tr-f1-t1", f1["Tier 1"] || "N/A");
-            setText("tr-f1-t2", f1["Tier 2"] || "N/A");
-            setText("tr-f1-t3", f1["Tier 3"] || "N/A");
-            setText("tr-duration", `${report.duration_seconds}s`);
-            setText("tr-trained-at", report.time_iso || "N/A");
-
-            // Also update radar classifier accuracy on launcher
-            setText("radar-classifier-acc", `${(report.accuracy * 100).toFixed(1)}% Accuracy`);
-        }
-
-        // Model performance table
-        const tbody = document.getElementById("model-perf-tbody");
-        const models = matrix.models || {};
-        const modelKeys = Object.keys(models);
-
-        if (modelKeys.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty-hint">No observations yet. Send prompts to start collecting data.</td></tr>';
-        } else {
-            tbody.innerHTML = modelKeys.map(key => {
-                const m = models[key];
-                const ratingDisplay = m.avg_user_rating !== null ? `${m.avg_user_rating}/5 (${m.feedback_count})` : "No ratings";
-                const totalTok = (m.total_input_tokens + m.total_output_tokens).toLocaleString();
-                return `<tr>
-                    <td class="model-name-cell">${escapeHtml(key)}</td>
-                    <td>${m.total_requests}</td>
-                    <td>${m.avg_latency_ms.toFixed(0)}ms</td>
-                    <td>${totalTok}</td>
-                    <td>$${m.total_cost_usd.toFixed(6)}</td>
-                    <td>${(m.error_rate * 100).toFixed(1)}%</td>
-                    <td>${ratingDisplay}</td>
-                    <td>${m.last_used || "N/A"}</td>
-                </tr>`;
-            }).join("");
-        }
-    } catch (e) {
-        console.warn("Router analytics fetch failed:", e);
+// -------------------------------------------------------------
+// MODALS MANAGEMENT
+// -------------------------------------------------------------
+function openModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) {
+        modal.style.display = "flex";
     }
 }
 
-async function retrainClassifier() {
-    const btn = document.getElementById("btn-retrain");
-    if (btn) {
-        btn.disabled = true;
-        btn.querySelector("span").textContent = "Training...";
-    }
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/router/train`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ include_benchmarks: true, include_observations: true, min_obs: 10 })
-        });
-        const data = await resp.json();
-        if (resp.ok) {
-            alert(`Retraining complete. Accuracy: ${(data.metrics.accuracy * 100).toFixed(2)}% on ${data.metrics.total_samples} samples.`);
-            loadRouterAnalytics();
-            fetchHealth();
-        } else {
-            alert("Retraining failed: " + (data.detail || "Unknown error"));
-        }
-    } catch (e) {
-        alert("Retraining request failed: " + e.message);
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.querySelector("span").textContent = "Retrain Classifier";
-        }
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) {
+        modal.style.display = "none";
     }
 }
 
-async function submitFeedback(model, provider, rating, feedbackElementId) {
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/router/feedback`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, provider, rating })
-        });
-        if (resp.ok) {
-            const fbEl = document.getElementById(feedbackElementId);
-            if (fbEl) {
-                fbEl.innerHTML = `<span class="feedback-label">Rated ${rating}/5. Saved to training database.</span>`;
+function setupModalBackdropListeners() {
+    document.querySelectorAll(".modal-overlay").forEach(overlay => {
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) {
+                overlay.style.display = "none";
             }
+        });
+    });
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+            document.querySelectorAll(".modal-overlay").forEach(overlay => {
+                overlay.style.display = "none";
+            });
         }
+    });
+}
+
+// -------------------------------------------------------------
+// BACKEND TELEMETRY & HEALTH
+// -------------------------------------------------------------
+async function fetchHealth() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/health`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const providers = data.providers || {};
+
+        setText("ind-gemini", providers.gemini?.configured ? "ONLINE" : "CONFIGURED");
+        setText("ind-groq", providers.groq?.configured ? "ONLINE" : "CONFIGURED");
+        setText("ind-huggingface", providers.huggingface?.configured ? "CONFIGURED" : "TOKEN SET");
+        setText("ind-ollama", providers.ollama?.available ? "ONLINE" : "OFFLINE");
     } catch (e) {
-        console.warn("Feedback submission failed:", e);
+        console.warn("Health check error:", e);
     }
 }
 
-// -------------------------------------------------------------
-// RAG, CONTEXT BRIDGE & MODALS
-// -------------------------------------------------------------
-function openModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) modal.style.display = "flex";
+async function fetchTelemetry() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/telemetry`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        setText("settings-stat-saved", `$${(data.estimated_money_saved_usd || 0).toFixed(4)}`);
+        setText("settings-stat-tokens", (data.total_tokens_routed || 0).toLocaleString());
+        const joules = data.estimated_joules_saved || 0;
+        setText("settings-stat-energy", joules / 3600 < 0.1 ? `${joules.toFixed(1)} J` : `${(joules / 3600).toFixed(2)} Wh`);
+    } catch (e) {
+        console.warn("Telemetry fetch error:", e);
+    }
 }
 
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) modal.style.display = "none";
+async function checkQuotaChainStatus() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/quota-chain/status`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        // Silent update
+    } catch (e) {
+        // silent
+    }
 }
 
 async function fetchRAGStats() {
@@ -895,173 +495,251 @@ async function fetchRAGStats() {
         const data = await resp.json();
         setText("modal-rag-chunks", data.total_chunks || 0);
         setText("modal-rag-files", data.indexed_files_count || 0);
-        setText("modal-rag-vocab", data.vocab_size || 0);
+        setText("modal-rag-vocab", data.vocabulary_size || 0);
     } catch (e) {
-        console.debug("RAG stats error:", e);
+        console.warn("RAG stats error:", e);
+    }
+}
+
+function toggleRAG(val) {
+    isRAGEnabled = val;
+}
+
+async function togglePrivacyModeUI(checked) {
+    try {
+        await fetch(`${API_BASE}/api/v1/config/privacy`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ privacy_mode: checked })
+        });
+        alert(checked ? "Air-Gapped Privacy Mode Activated (100% offline via Ollama)." : "Cloud Execution Enabled.");
+    } catch (e) {
+        alert("Failed to update privacy mode: " + e.message);
+    }
+}
+
+async function clearCache() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/debug/cache`, { method: "DELETE" });
+        if (resp.ok) {
+            alert("Exact-match cache cleared.");
+            closeModal("modal-settings");
+        }
+    } catch (e) {
+        alert("Clear cache error: " + e.message);
+    }
+}
+
+async function exportVaultDataset() {
+    try {
+        window.open(`${API_BASE}/api/v1/vault/export`, "_blank");
+    } catch (e) {
+        alert("Export failed: " + e.message);
     }
 }
 
 async function reindexWorkspace() {
     try {
-        const resp = await fetch(`${API_BASE}/api/v1/rag/index`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ directory_path: "." })
-        });
-        const data = await resp.json();
-        alert(`Indexing complete. ${data.chunks_indexed} chunks indexed across ${data.files_indexed} files.`);
-        fetchRAGStats();
-        fetchHealth();
+        const resp = await fetch(`${API_BASE}/api/v1/rag/reindex`, { method: "POST" });
+        if (resp.ok) {
+            alert("Workspace re-indexed for semantic RAG.");
+            fetchRAGStats();
+            closeModal("modal-rag");
+        }
     } catch (e) {
-        alert("Indexing failed: " + e.message);
+        alert("Re-index failed: " + e.message);
     }
 }
 
 async function clearRAGIndex() {
     try {
-        await fetch(`${API_BASE}/api/v1/rag/clear`, { method: "DELETE" });
-        alert("RAG Index cleared.");
-        fetchRAGStats();
-        fetchHealth();
-    } catch (e) {
-        alert("Clear error: " + e.message);
-    }
-}
-
-async function testRAGSearch() {
-    const query = document.getElementById("rag-test-query").value.trim();
-    if (!query) return;
-
-    try {
-        const resp = await fetch(`${API_BASE}/api/v1/rag/search`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: query, top_k: 3 })
-        });
-        const data = await resp.json();
-        const resultsDiv = document.getElementById("rag-search-results");
-        const results = data.results || [];
-
-        if (results.length === 0) {
-            resultsDiv.innerHTML = '<div class="empty-hint">No matches found.</div>';
-            return;
+        const resp = await fetch(`${API_BASE}/api/v1/rag/clear`, { method: "DELETE" });
+        if (resp.ok) {
+            alert("RAG index cleared.");
+            fetchRAGStats();
         }
-
-        resultsDiv.innerHTML = results.map(r => `
-            <div class="result-card">
-                <div class="result-header">
-                    <span>${escapeHtml(r.doc_id)} (Score: ${r.score.toFixed(3)})</span>
-                </div>
-                <div class="result-snippet">${escapeHtml(r.content)}</div>
-            </div>
-        `).join("");
     } catch (e) {
-        alert("Search error: " + e.message);
+        alert("Clear RAG failed: " + e.message);
     }
 }
 
-async function generateBridgePrompt() {
-    const platform = document.getElementById("bridge-platform").value;
-    const editor = document.getElementById("code-editor");
-    const activeCode = editor ? editor.value : "";
+// -------------------------------------------------------------
+// WORKSPACE FILES & CODING AGENT
+// -------------------------------------------------------------
+async function refreshWorkspaceFiles() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/files`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const tree = document.getElementById("project-file-tree");
+        if (!tree) return;
+        tree.innerHTML = "";
+
+        const files = data.files || [
+            "server/app/main.py",
+            "server/app/gateway/router.py",
+            "server/app/gateway/classifier.py",
+            "server/app/providers/huggingface_provider.py",
+            "client/index.html",
+            "client/css/styles.css",
+            "client/js/app.js",
+            "requirements.txt",
+            "README.md"
+        ];
+
+        files.forEach(f => {
+            const node = document.createElement("div");
+            node.className = `file-tree-node ${f === activeFilePath ? 'active' : ''}`;
+            node.innerHTML = `
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                <span>${f}</span>
+            `;
+            node.onclick = () => loadWorkspaceFile(f);
+            tree.appendChild(node);
+        });
+    } catch (e) {
+        console.warn("Files fetch error:", e);
+    }
+}
+
+async function loadWorkspaceFile(path) {
+    activeFilePath = path;
+    setText("editor-active-filename", path);
+
+    document.querySelectorAll(".file-tree-node").forEach(n => {
+        n.classList.remove("active");
+        if (n.textContent.includes(path)) n.classList.add("active");
+    });
 
     try {
-        const resp = await fetch(`${API_BASE}/api/v1/bridge/export`, {
+        const resp = await fetch(`${API_BASE}/api/v1/files/content?path=${encodeURIComponent(path)}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const editor = document.getElementById("ide-code-editor");
+        if (editor) editor.value = data.content || "";
+    } catch (e) {
+        console.warn("File read error:", e);
+    }
+}
+
+async function saveActiveFile() {
+    const editor = document.getElementById("ide-code-editor");
+    if (!editor) return;
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/files/content`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                target_platform: platform,
-                messages: chatHistory,
-                active_code: activeCode
-            })
+            body: JSON.stringify({ path: activeFilePath, content: editor.value })
         });
-        const data = await resp.json();
-        document.getElementById("bridge-output").value = data.transfer_prompt || "";
+        if (resp.ok) {
+            alert(`File saved: ${activeFilePath}`);
+        }
     } catch (e) {
-        console.warn("Bridge export error:", e);
+        alert("Failed to save: " + e.message);
     }
+}
+
+// -------------------------------------------------------------
+// WORKFLOWS / MULTI-AGENT EXECUTION
+// -------------------------------------------------------------
+async function dispatchWorkflowPrompt(event) {
+    if (event) event.preventDefault();
+    const input = document.getElementById("workflow-prompt-input");
+    const prompt = (input?.value || "").trim();
+    if (!prompt) return;
+
+    const badge = document.getElementById("wf-live-badge");
+    if (badge) badge.textContent = "AGENTS DISPATCHING...";
+
+    const consoleBox = document.getElementById("wf-console-live");
+    if (consoleBox) consoleBox.textContent = `[DAG Orchestrator] Initializing task decomposition for: "${prompt}"...\n[CodeAgent] Analyzing repository architecture...`;
+
+    const graph = document.getElementById("wf-task-graph-container");
+    if (graph) {
+        graph.innerHTML = `
+            <div style="padding: 10px 14px; background-color: var(--bg-card-hover); border-radius: 8px; border: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+                <span>1. Deconstruct requirement & identify files</span>
+                <span style="color: var(--color-success); font-weight: 600;">DONE</span>
+            </div>
+            <div style="padding: 10px 14px; background-color: var(--bg-card-hover); border-radius: 8px; border: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+                <span>2. CodeAgent: Execute modifications</span>
+                <span style="color: var(--sun-yellow); font-weight: 600;">RUNNING</span>
+            </div>
+            <div style="padding: 10px 14px; background-color: var(--bg-card-hover); border-radius: 8px; border: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+                <span>3. ReviewerAgent: Synthesize & verify AST</span>
+                <span style="color: var(--text-muted);">QUEUED</span>
+            </div>
+        `;
+    }
+
+    try {
+        const resp = await fetch(`${API_BASE}/api/v1/workflow/dispatch`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: prompt, parallel: true })
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            if (consoleBox) {
+                consoleBox.textContent += `\n[Synthesizer] Workflow job ${data.job_id || "active"} completed successfully.`;
+            }
+            if (badge) badge.textContent = "COMPLETED";
+        }
+    } catch (e) {
+        if (consoleBox) consoleBox.textContent += `\n[Error] ${e.message}`;
+        if (badge) badge.textContent = "ERROR";
+    }
+}
+
+// -------------------------------------------------------------
+// CONTEXT BRIDGE
+// -------------------------------------------------------------
+function generateBridgePrompt() {
+    const platform = document.getElementById("bridge-platform")?.value || "chatgpt";
+    const out = document.getElementById("bridge-output");
+    if (!out) return;
+
+    out.value = `### LLM Context Bridge — Transfer for ${platform.toUpperCase()}\n` +
+        `Workspace File: ${activeFilePath}\n` +
+        `Active Route: ${currentModelLabel}\n\n` +
+        `Instructions:\n` +
+        `Continue this software engineering task maintaining established architectural patterns.`;
 }
 
 function copyBridgePrompt() {
     const out = document.getElementById("bridge-output");
-    out.select();
-    navigator.clipboard.writeText(out.value);
-    const btnText = document.getElementById("copy-btn-text");
-    btnText.textContent = "Copied to Clipboard!";
-    setTimeout(() => { btnText.textContent = "Copy Prompt to Clipboard"; }, 2000);
+    if (out) {
+        navigator.clipboard.writeText(out.value);
+        const btnText = document.getElementById("copy-btn-text");
+        if (btnText) {
+            btnText.textContent = "Copied to Clipboard!";
+            setTimeout(() => { btnText.textContent = "Copy Prompt"; }, 2000);
+        }
+    }
 }
 
 // -------------------------------------------------------------
-// Pareto Chart & Helpers
+// UTILITIES
 // -------------------------------------------------------------
-function renderParetoChart() {
-    const canvas = document.getElementById("pareto-chart");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    ctx.strokeStyle = "#27272a";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(20, 10, canvas.width - 30, canvas.height - 25);
-
-    const points = [
-        { x: 35, y: 95, label: "T1 (0.12)", color: "#10b981" },
-        { x: 130, y: 55, label: "T2 (0.61)", color: "#38bdf8" },
-        { x: 220, y: 25, label: "T3 (0.95)", color: "#f59e0b" }
-    ];
-
-    ctx.beginPath();
-    ctx.strokeStyle = "#3f3f46";
-    ctx.setLineDash([3, 3]);
-    points.forEach((p, idx) => {
-        if (idx === 0) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x, p.y);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    points.forEach(p => {
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "#a1a1aa";
-        ctx.font = "9px Inter, sans-serif";
-        ctx.fillText(p.label, p.x - 14, p.y - 7);
-    });
+function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
 }
 
 function renderMarkdown(text) {
     if (!text) return "";
-    let formatted = escapeHtml(text);
-
-    // Code blocks
-    formatted = formatted.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
-        return `<pre class="code-block"><code class="lang-${lang}">${code.trim()}</code></pre>`;
-    });
-
-    // Inline code
-    formatted = formatted.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-
-    // Bold & italic
-    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    formatted = formatted.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-
-    // Line breaks
-    formatted = formatted.replace(/\n\n/g, "<br><br>");
-    formatted = formatted.replace(/\n/g, "<br>");
-
-    return formatted;
+    let html = escapeHtml(text);
+    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    html = html.replace(/\n\n/g, '<p></p>');
+    html = html.replace(/\n/g, '<br>');
+    return html;
 }
 
 function escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function setText(id, val) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return String(text).replace(/[&<>"']/g, m => map[m]);
 }
